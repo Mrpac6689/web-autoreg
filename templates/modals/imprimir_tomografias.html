@@ -20,6 +20,9 @@
             </div>
         </div>
         <div class="modal-footer">
+            <button type="button" class="glass-button-action" id="btn-historico-pdf">
+                <i class="fas fa-history"></i> Histórico
+            </button>
             <button type="button" class="glass-button-action" id="btn-imprimir-pdf">
                 <i class="fas fa-print"></i> Imprimir
             </button>
@@ -27,6 +30,31 @@
                 <i class="fas fa-times"></i> Sair
             </button>
         </div>
+    </div>
+    
+    <!-- Modal de Histórico de PDFs -->
+    <div class="glass-modal" id="modal-historico-pdfs">
+        <div class="glass-modal-content modal-medium">
+            <div class="modal-header">
+                <h2>Histórico de PDFs</h2>
+                <button class="glass-modal-close" id="close-modal-historico">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="historico-lista" class="historico-lista">
+                    <div class="loading-message">
+                        <i class="fas fa-spinner fa-spin"></i> Carregando histórico...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="glass-button-action" id="btn-fechar-historico">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
     </div>
 </div>
 

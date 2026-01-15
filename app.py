@@ -191,7 +191,7 @@ def load_exames_csv():
     csv_path = Path(WORKDIR) / 'exames_solicitar.csv'
     
     # Cabeçalho padrão do CSV
-    CABECALHO_PADRAO = ['ra', 'cns', 'procedimento', 'chave', 'solicitacao', 'erro']
+    CABECALHO_PADRAO = ['ra', 'hora', 'cns', 'procedimento', 'chave', 'solicitacao']
     
     try:
         # Garantir que o diretório existe
@@ -249,22 +249,33 @@ def save_exames_csv():
         csv_path = Path(WORKDIR) / 'exames_solicitar.csv'
         
         # Cabeçalho padrão que DEVE ser preservado
-        CABECALHO_PADRAO = ['ra', 'cns', 'procedimento', 'chave', 'solicitacao', 'erro']
+        CABECALHO_PADRAO = ['ra', 'hora', 'cns', 'procedimento', 'chave', 'solicitacao']
         
         # Garantir que o diretório existe
         csv_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Garantir que a primeira linha sempre seja o cabeçalho correto
         if len(data) > 0:
+            # Forçar cabeçalho na primeira posição
             data[0] = CABECALHO_PADRAO
         else:
             # Se não houver dados, criar apenas com cabeçalho
             data = [CABECALHO_PADRAO]
         
+        # Debug: verificar o que está sendo recebido
+        print(f"Recebido {len(data)} linhas para salvar")
+        print(f"Primeira linha (cabeçalho): {data[0]}")
+        if len(data) > 1:
+            print(f"Primeira linha de dados: {data[1]}")
+        if len(data) > 2:
+            print(f"Segunda linha de dados: {data[2]}")
+        
         # Salvar o CSV
         with open(csv_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerows(data)
+        
+        print(f"CSV salvo com {len(data)} linhas")
         
         return jsonify({'success': True})
     except Exception as e:
@@ -440,21 +451,137 @@ def interromper_solicitacao_tcs():
         }), 500
 
 
+def encontrar_pdf_mais_recente():
+    """Encontra o PDF mais recente com padrão solicitacoes_exames_imprimir*.pdf"""
+    workdir = Path(WORKDIR)
+    if not workdir.exists():
+        return None
+    
+    # Buscar todos os PDFs que começam com o padrão (com ou sem timestamp)
+    padrao = 'solicitacoes_exames_imprimir*.pdf'
+    pdfs = list(workdir.glob(padrao))
+    
+    if not pdfs:
+        return None
+    
+    # Ordenar por data de modificação (mais recente primeiro)
+    pdfs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return pdfs[0]
+
+
+def listar_pdfs_disponiveis():
+    """Lista todos os PDFs disponíveis ordenados por data (mais recente primeiro)"""
+    workdir = Path(WORKDIR)
+    if not workdir.exists():
+        return []
+    
+    # Buscar todos os PDFs que começam com o padrão (com ou sem timestamp)
+    padrao = 'solicitacoes_exames_imprimir*.pdf'
+    pdfs = list(workdir.glob(padrao))
+    
+    if not pdfs:
+        return []
+    
+    # Ordenar por data de modificação (mais recente primeiro)
+    pdfs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    
+    # Filtrar apenas PDFs dos últimos 30 dias
+    from datetime import datetime, timedelta
+    limite_data = datetime.now() - timedelta(days=30)
+    
+    pdfs_filtrados = []
+    for pdf in pdfs:
+        data_modificacao = datetime.fromtimestamp(pdf.stat().st_mtime)
+        if data_modificacao >= limite_data:
+            # Extrair timestamp do nome do arquivo se houver
+            nome = pdf.stem
+            timestamp = None
+            # Tentar extrair timestamp de diferentes formatos
+            # Formato 1: solicitacoes_exames_imprimir_YYYYMMDD_HHMMSS
+            # Formato 2: solicitacoes_exames_imprimir_YYYYMMDDHHMMSS
+            # Formato 3: solicitacoes_exames_imprimir_YYYY-MM-DD_HH-MM-SS
+            if '_' in nome or nome.replace('solicitacoes_exames_imprimir', '').strip():
+                # Tentar identificar padrão de timestamp
+                sufixo = nome.replace('solicitacoes_exames_imprimir', '').strip('_')
+                if sufixo:
+                    timestamp = sufixo
+            
+            pdfs_filtrados.append({
+                'nome': pdf.name,
+                'caminho': str(pdf),
+                'data_modificacao': data_modificacao.strftime('%d/%m/%Y %H:%M:%S'),
+                'timestamp': timestamp,
+                'tamanho': pdf.stat().st_size
+            })
+    
+    return pdfs_filtrados
+
+
 @app.route('/api/imprimir-tcs/pdf')
 @login_required
 def api_imprimir_tcs_pdf():
-    """Serve o PDF de solicitações de exames para impressão"""
-    pdf_path = Path(WORKDIR) / 'solicitacoes_exames_imprimir.pdf'
+    """Serve o PDF mais recente de solicitações de exames para impressão"""
+    pdf_path = encontrar_pdf_mais_recente()
     
-    if not pdf_path.exists():
-        return jsonify({'error': 'Arquivo PDF não encontrado'}), 404
+    if not pdf_path or not pdf_path.exists():
+        return jsonify({'error': 'Nenhum arquivo PDF encontrado'}), 404
     
     return send_file(
         str(pdf_path),
         mimetype='application/pdf',
         as_attachment=False,
-        download_name='solicitacoes_exames_imprimir.pdf'
+        download_name=pdf_path.name
     )
+
+
+@app.route('/api/imprimir-tcs/pdf/<nome_arquivo>')
+@login_required
+def api_imprimir_tcs_pdf_especifico(nome_arquivo):
+    """Serve um PDF específico pelo nome do arquivo"""
+    # Validar nome do arquivo para evitar path traversal
+    if '..' in nome_arquivo or '/' in nome_arquivo or '\\' in nome_arquivo:
+        return jsonify({'error': 'Nome de arquivo inválido'}), 400
+    
+    pdf_path = Path(WORKDIR) / nome_arquivo
+    
+    # Verificar se o arquivo existe e está no diretório correto
+    if not pdf_path.exists() or not pdf_path.is_file():
+        return jsonify({'error': 'Arquivo PDF não encontrado'}), 404
+    
+    # Verificar se o arquivo está dentro do WORKDIR (segurança)
+    try:
+        pdf_path.resolve().relative_to(Path(WORKDIR).resolve())
+    except ValueError:
+        return jsonify({'error': 'Acesso negado'}), 403
+    
+    # Verificar se é um PDF válido (deve começar com o padrão e ter extensão .pdf)
+    if not pdf_path.name.startswith('solicitacoes_exames_imprimir') or pdf_path.suffix != '.pdf':
+        return jsonify({'error': 'Arquivo inválido'}), 400
+    
+    return send_file(
+        str(pdf_path),
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=pdf_path.name
+    )
+
+
+@app.route('/api/imprimir-tcs/historico', methods=['GET'])
+@login_required
+def api_imprimir_tcs_historico():
+    """Lista todos os PDFs disponíveis para impressão"""
+    try:
+        pdfs = listar_pdfs_disponiveis()
+        return jsonify({
+            'success': True,
+            'pdfs': pdfs,
+            'total': len(pdfs)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 if __name__ == '__main__':

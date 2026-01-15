@@ -156,7 +156,7 @@ function renderSpreadsheet() {
     body.innerHTML = '';
     
     // Cabeçalho padrão do CSV
-    const CABECALHO_PADRAO = ['ra', 'cns', 'procedimento', 'chave', 'solicitacao', 'erro'];
+    const CABECALHO_PADRAO = ['ra', 'hora', 'cns', 'procedimento', 'chave', 'solicitacao'];
     
     // Garantir que sempre há pelo menos o cabeçalho
     if (spreadsheetData.length === 0) {
@@ -196,16 +196,50 @@ function renderSpreadsheet() {
             td.dataset.row = i;
             td.dataset.col = j;
             
-            td.addEventListener('blur', function() {
-                updateCellData(this);
-            });
+            // Formatação de hora apenas quando o foco sai da célula (col 1)
+            if (j === 1) {
+                // Formatar e salvar quando o foco sair da célula (Tab, Enter, clique fora)
+                td.addEventListener('blur', function() {
+                    const valor = this.textContent.trim();
+                    const numeros = valor.replace(/\D/g, '');
+                    
+                    // Se houver números, formatar
+                    if (numeros && numeros.length > 0) {
+                        const horaFormatada = formatarHora(numeros);
+                        // Aplicar formatação se for diferente
+                        if (horaFormatada && horaFormatada !== valor) {
+                            this.textContent = horaFormatada;
+                        }
+                    } else if (valor !== '' && valor !== ':') {
+                        // Se não houver números mas houver texto, limpar
+                        this.textContent = '';
+                    }
+                    
+                    // Salvar os dados
+                    updateCellData(this);
+                });
+            } else {
+                // Para outras colunas, apenas salvar no blur
+                td.addEventListener('blur', function() {
+                    updateCellData(this);
+                });
+            }
             
-            td.addEventListener('keydown', function(e) {
+            // Listener de keydown para navegação (deve vir depois da formatação de hora)
+            const keydownHandler = function(e) {
+                // Se for coluna hora, permitir formatação primeiro
+                if (j === 1 && (e.key >= '0' && e.key <= '9' || e.key === 'Backspace' || e.key === 'Delete')) {
+                    // Não fazer nada aqui, deixar o handler de formatação processar
+                    // A formatação será aplicada no keyup/input
+                }
+                
                 const result = handleCellKeydown(e, this);
                 if (result === false) {
                     e.stopImmediatePropagation();
                 }
-            }, true); // Usar capture phase para garantir que seja executado primeiro
+            };
+            
+            td.addEventListener('keydown', keydownHandler, true); // Usar capture phase para garantir que seja executado primeiro
             
             td.addEventListener('focus', function() {
                 // Selecionar todo o texto ao focar (exceto se estiver editando)
@@ -232,13 +266,16 @@ function addEmptyRow() {
     const body = document.getElementById('spreadsheet-body');
     if (!body) return;
     
-    // Usar o número de linhas no DOM, não no spreadsheetData
-    const currentRowCount = body.children.length;
+    // IMPORTANTE: O índice da nova linha em spreadsheetData
+    // spreadsheetData[0] = cabeçalho
+    // spreadsheetData[1+] = linhas de dados
+    // Se temos 3 linhas no body, elas são spreadsheetData[1], [2], [3]
+    // Então a próxima linha será spreadsheetData[4] = spreadsheetData.length
+    const newRowIndex = spreadsheetData.length; // Próximo índice disponível em spreadsheetData
     const row = document.createElement('tr');
     const numCols = spreadsheetData[0].length;
     
     // Garantir que o spreadsheetData tenha espaço para esta linha
-    const newRowIndex = currentRowCount;
     while (spreadsheetData.length <= newRowIndex) {
         spreadsheetData.push([]);
     }
@@ -253,6 +290,30 @@ function addEmptyRow() {
         td.addEventListener('blur', function() {
             updateCellData(this);
         });
+        
+        // Formatação de hora também para linhas adicionadas dinamicamente (col 1)
+        if (j === 1) {
+            // Formatar e salvar quando o foco sair da célula
+            td.addEventListener('blur', function() {
+                const valor = this.textContent.trim();
+                const numeros = valor.replace(/\D/g, '');
+                
+                // Se houver números, formatar
+                if (numeros && numeros.length > 0) {
+                    const horaFormatada = formatarHora(numeros);
+                    // Aplicar formatação se for diferente
+                    if (horaFormatada && horaFormatada !== valor) {
+                        this.textContent = horaFormatada;
+                    }
+                } else if (valor !== '' && valor !== ':') {
+                    // Se não houver números mas houver texto, limpar
+                    this.textContent = '';
+                }
+                
+                // Salvar os dados
+                updateCellData(this);
+            });
+        }
         
         td.addEventListener('keydown', function(e) {
             const result = handleCellKeydown(e, this);
@@ -281,18 +342,21 @@ function addEmptyRow() {
 function updateCellData(cell) {
     const row = parseInt(cell.dataset.row);
     const col = parseInt(cell.dataset.col);
-    const value = cell.textContent.trim();
+    let value = cell.textContent.trim();
     
     // NUNCA permitir editar a primeira linha (cabeçalho)
     if (row === 0) {
         // Restaurar o valor original do cabeçalho
-        const CABECALHO_PADRAO = ['ra', 'cns', 'procedimento', 'chave', 'solicitacao', 'erro'];
+        const CABECALHO_PADRAO = ['ra', 'hora', 'cns', 'procedimento', 'chave', 'solicitacao'];
         if (spreadsheetData[0] && spreadsheetData[0][col] !== CABECALHO_PADRAO[col]) {
             spreadsheetData[0][col] = CABECALHO_PADRAO[col];
             cell.textContent = CABECALHO_PADRAO[col];
         }
         return;
     }
+    
+    // Para coluna hora, não formatar aqui - a formatação já foi feita pelos listeners
+    // Apenas salvar o valor que já está formatado
     
     // Garantir que a linha existe
     while (spreadsheetData.length <= row) {
@@ -311,6 +375,71 @@ function updateCellData(cell) {
     
     // Não adicionar linha automaticamente aqui - deixar para o usuário usar Enter/Tab
     // Isso evita criar muitas linhas desnecessárias
+}
+
+/**
+ * Formata hora automaticamente
+ * Exemplo: 1102 -> 11:02, 9 -> 09:00, 930 -> 09:30, 1851 -> 18:51
+ */
+function formatarHora(valor) {
+    // Remover caracteres não numéricos
+    let numeros = valor.replace(/\D/g, '');
+    
+    // Se estiver vazio, retornar vazio
+    if (!numeros || numeros.length === 0) {
+        return '';
+    }
+    
+    // Limitar a 4 dígitos
+    if (numeros.length > 4) {
+        numeros = numeros.substring(0, 4);
+    }
+    
+    // Formatar baseado no tamanho
+    let hora = '';
+    let minuto = '';
+    
+    if (numeros.length === 1) {
+        // 1 dígito: 9 -> 09:00
+        hora = '0' + numeros;
+        minuto = '00';
+    } else if (numeros.length === 2) {
+        // 2 dígitos: 11 -> 11:00
+        hora = numeros;
+        minuto = '00';
+    } else if (numeros.length === 3) {
+        // 3 dígitos: 930 -> 09:30
+        hora = '0' + numeros[0];
+        minuto = numeros.substring(1, 3);
+    } else {
+        // 4 dígitos: 1102 -> 11:02, 1851 -> 18:51
+        hora = numeros.substring(0, 2);
+        minuto = numeros.substring(2, 4);
+    }
+    
+    // Validar hora (0-23) e minuto (0-59)
+    let h = parseInt(hora, 10);
+    let m = parseInt(minuto, 10);
+    
+    // Validar e corrigir hora
+    if (isNaN(h) || h < 0) {
+        h = 0;
+    } else if (h > 23) {
+        h = 23;
+    }
+    
+    // Validar e corrigir minuto
+    if (isNaN(m) || m < 0) {
+        m = 0;
+    } else if (m > 59) {
+        m = 59;
+    }
+    
+    // Formatar com zero à esquerda
+    hora = h.toString().padStart(2, '0');
+    minuto = m.toString().padStart(2, '0');
+    
+    return `${hora}:${minuto}`;
 }
 
 /**
@@ -341,6 +470,11 @@ function handleCellKeydown(e, cell) {
     
     if (!body) return;
     
+    // IMPORTANTE: dataset.row é o índice em spreadsheetData (1 = primeira linha de dados)
+    // Mas body.children usa índice baseado em 0 (0 = primeira linha no body)
+    // Então bodyRow = row - 1 (porque row 1 em spreadsheetData = índice 0 no body)
+    const bodyRow = row - 1;
+    
     // Tab - próxima célula à direita (ou primeira coluna da próxima linha se estiver na última coluna)
     if (e.key === 'Tab') {
         e.preventDefault();
@@ -352,7 +486,7 @@ function handleCellKeydown(e, cell) {
         
         if (col < numCols - 1) {
             // Próxima coluna na mesma linha
-            const currentRow = body.children[row];
+            const currentRow = body.children[bodyRow];
             if (currentRow && currentRow.children[col + 1]) {
                 currentRow.children[col + 1].focus();
                 // Selecionar todo o texto na célula
@@ -360,8 +494,8 @@ function handleCellKeydown(e, cell) {
             }
         } else {
             // Primeira coluna da próxima linha
-            if (row < body.children.length - 1) {
-                const nextRow = body.children[row + 1];
+            if (bodyRow < body.children.length - 1) {
+                const nextRow = body.children[bodyRow + 1];
                 if (nextRow && nextRow.children[0]) {
                     nextRow.children[0].focus();
                     selectCellText(nextRow.children[0]);
@@ -381,7 +515,7 @@ function handleCellKeydown(e, cell) {
         return false;
     }
     
-    // Enter - próxima linha, mesma coluna
+    // Enter - próxima linha, mesma coluna (exceto coluna hora que vai para coluna ra abaixo)
     if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
@@ -389,22 +523,46 @@ function handleCellKeydown(e, cell) {
         // Salvar o conteúdo atual antes de mover
         updateCellData(cell);
         
-        // Se estiver na última linha, adicionar uma nova
-        if (row >= body.children.length - 1) {
-            addEmptyRow();
-            setTimeout(() => {
-                const newRow = body.children[body.children.length - 1];
-                if (newRow && newRow.children[col]) {
-                    newRow.children[col].focus();
-                    selectCellText(newRow.children[col]);
+        // Se estiver na coluna hora (col 1), ir para a célula abaixo na coluna ra (col 0)
+        if (col === 1) {
+            const targetCol = 0; // Coluna ra
+            
+            // Se estiver na última linha, adicionar uma nova
+            if (bodyRow >= body.children.length - 1) {
+                addEmptyRow();
+                setTimeout(() => {
+                    const newRow = body.children[body.children.length - 1];
+                    if (newRow && newRow.children[targetCol]) {
+                        newRow.children[targetCol].focus();
+                        selectCellText(newRow.children[targetCol]);
+                    }
+                }, 10);
+            } else {
+                // Célula abaixo na coluna ra
+                const nextRow = body.children[bodyRow + 1];
+                if (nextRow && nextRow.children[targetCol]) {
+                    nextRow.children[targetCol].focus();
+                    selectCellText(nextRow.children[targetCol]);
                 }
-            }, 10);
+            }
         } else {
-            // Célula abaixo na mesma coluna
-            const nextRow = body.children[row + 1];
-            if (nextRow && nextRow.children[col]) {
-                nextRow.children[col].focus();
-                selectCellText(nextRow.children[col]);
+            // Comportamento padrão: célula abaixo na mesma coluna
+            if (bodyRow >= body.children.length - 1) {
+                addEmptyRow();
+                setTimeout(() => {
+                    const newRow = body.children[body.children.length - 1];
+                    if (newRow && newRow.children[col]) {
+                        newRow.children[col].focus();
+                        selectCellText(newRow.children[col]);
+                    }
+                }, 10);
+            } else {
+                // Célula abaixo na mesma coluna
+                const nextRow = body.children[bodyRow + 1];
+                if (nextRow && nextRow.children[col]) {
+                    nextRow.children[col].focus();
+                    selectCellText(nextRow.children[col]);
+                }
             }
         }
         return false;
@@ -419,7 +577,7 @@ function handleCellKeydown(e, cell) {
         updateCellData(cell);
         
         // Se estiver na última linha, adicionar uma nova
-        if (row >= body.children.length - 1) {
+        if (bodyRow >= body.children.length - 1) {
             addEmptyRow();
             setTimeout(() => {
                 const newRow = body.children[body.children.length - 1];
@@ -430,7 +588,7 @@ function handleCellKeydown(e, cell) {
             }, 10);
         } else {
             // Célula abaixo na mesma coluna
-            const nextRow = body.children[row + 1];
+            const nextRow = body.children[bodyRow + 1];
             if (nextRow && nextRow.children[col]) {
                 nextRow.children[col].focus();
                 selectCellText(nextRow.children[col]);
@@ -444,8 +602,8 @@ function handleCellKeydown(e, cell) {
         e.preventDefault();
         e.stopPropagation();
         updateCellData(cell);
-        if (row > 0) {
-            const prevRow = body.children[row - 1];
+        if (bodyRow > 0) {
+            const prevRow = body.children[bodyRow - 1];
             if (prevRow && prevRow.children[col]) {
                 prevRow.children[col].focus();
                 selectCellText(prevRow.children[col]);
@@ -470,15 +628,15 @@ function handleCellKeydown(e, cell) {
         updateCellData(cell);
         if (col > 0) {
             // Coluna anterior na mesma linha
-            const currentRow = body.children[row];
+            const currentRow = body.children[bodyRow];
             if (currentRow && currentRow.children[col - 1]) {
                 currentRow.children[col - 1].focus();
                 // Mover cursor para o final do texto
                 moveCursorToEnd(currentRow.children[col - 1]);
             }
-        } else if (row > 0) {
+        } else if (bodyRow > 0) {
             // Última coluna da linha anterior
-            const prevRow = body.children[row - 1];
+            const prevRow = body.children[bodyRow - 1];
             const numCols = spreadsheetData[0].length;
             if (prevRow && prevRow.children[numCols - 1]) {
                 prevRow.children[numCols - 1].focus();
@@ -506,15 +664,15 @@ function handleCellKeydown(e, cell) {
         const numCols = spreadsheetData[0].length;
         if (col < numCols - 1) {
             // Próxima coluna na mesma linha
-            const currentRow = body.children[row];
+            const currentRow = body.children[bodyRow];
             if (currentRow && currentRow.children[col + 1]) {
                 currentRow.children[col + 1].focus();
                 // Mover cursor para o início do texto
                 moveCursorToStart(currentRow.children[col + 1]);
             }
-        } else if (row < body.children.length - 1) {
+        } else if (bodyRow < body.children.length - 1) {
             // Primeira coluna da próxima linha
-            const nextRow = body.children[row + 1];
+            const nextRow = body.children[bodyRow + 1];
             if (nextRow && nextRow.children[0]) {
                 nextRow.children[0].focus();
                 moveCursorToStart(nextRow.children[0]);
@@ -580,30 +738,56 @@ function limparPlanilha() {
 function salvarPlanilha() {
     return new Promise((resolve, reject) => {
         // Cabeçalho padrão que DEVE ser preservado
-        const CABECALHO_PADRAO = ['ra', 'cns', 'procedimento', 'chave', 'solicitacao', 'erro'];
+        const CABECALHO_PADRAO = ['ra', 'hora', 'cns', 'procedimento', 'chave', 'solicitacao'];
         
-        // Garantir que a primeira linha sempre seja o cabeçalho correto
-        const dataToSave = [...spreadsheetData];
-        dataToSave[0] = [...CABECALHO_PADRAO]; // Forçar cabeçalho correto
+        // SIMPLIFICADO: Salvar TODAS as linhas do spreadsheetData
+        // spreadsheetData[0] = cabeçalho (será substituído pelo padrão)
+        // spreadsheetData[1+] = linhas de dados (serão salvas como estão)
+        const dataToSave = [];
         
-        // Remover linhas vazias (exceto o cabeçalho)
-        const dataFiltered = dataToSave.filter((row, index) => {
-            if (index === 0) return true; // Sempre manter cabeçalho
-            return row.some(cell => cell && cell.trim() !== '');
-        });
+        // Primeiro, sempre adicionar o cabeçalho padrão
+        dataToSave.push([...CABECALHO_PADRAO]);
+        
+        // Depois, adicionar TODAS as linhas de dados (a partir do índice 1)
+        // Não filtrar nada - salvar todas as linhas, mesmo que vazias
+        for (let i = 1; i < spreadsheetData.length; i++) {
+            const row = spreadsheetData[i];
+            
+            // Garantir que a linha seja um array
+            if (!row || !Array.isArray(row)) {
+                // Se não for array, criar um array vazio
+                const emptyRow = new Array(CABECALHO_PADRAO.length).fill('');
+                dataToSave.push(emptyRow);
+            } else {
+                // Garantir que a linha tenha o número correto de colunas
+                const rowData = [];
+                for (let j = 0; j < CABECALHO_PADRAO.length; j++) {
+                    rowData.push(row[j] !== undefined ? String(row[j]) : '');
+                }
+                dataToSave.push(rowData);
+            }
+        }
+        
+        // Debug: verificar o que está sendo enviado
+        console.log('Dados a serem salvos:', dataToSave);
+        console.log('Número de linhas (incluindo cabeçalho):', dataToSave.length);
+        console.log('Primeira linha (cabeçalho):', dataToSave[0]);
+        for (let i = 1; i < dataToSave.length; i++) {
+            console.log(`Linha ${i} de dados:`, dataToSave[i]);
+        }
         
         fetch('/api/exames-solicitar/save', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ data: dataFiltered })
+            body: JSON.stringify({ data: dataToSave })
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 // Atualizar spreadsheetData com o cabeçalho correto
-                spreadsheetData = [...dataFiltered];
+                spreadsheetData = [...dataToSave];
                 originalData = JSON.parse(JSON.stringify(spreadsheetData));
                 isEdited = false;
                 checkForEdits();
