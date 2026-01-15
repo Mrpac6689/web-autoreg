@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUTOREG - Sistema Automatizado de operações G-HOSP e SISREG</title>
+    
+    <!-- Bootstrap CSS local -->
+    <link href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+    
+    <!-- FontAwesome local -->
+    <link href="{{ url_for('static', filename='fontawesome/css/all.min.css') }}" rel="stylesheet">
+    
+    <!-- CSS Glassmorphism customizado -->
+    <link href="{{ url_for('static', filename='css/glassmorphism.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="main-container">
+        <!-- Barra Superior -->
+        <div class="top-bar">
+            <button class="menu-toggle" id="menu-toggle" aria-label="Menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="top-bar-description">
+                Núcleo Interno de Regulação - NIR - HUERB. Sistema Automatizado de operações G-HOSP e SISREG.
+            </div>
+            <div class="top-bar-right">
+                <div class="top-bar-time" id="current-time">
+                    Carregando...
+                </div>
+                <button class="logout-button" id="btn-logout" aria-label="Sair" title="Sair do sistema">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Sair</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Overlay para menu -->
+        <div class="menu-overlay" id="menu-overlay"></div>
+
+        <!-- Menu Flutuante -->
+        <div class="floating-menu" id="floating-menu">
+            <div class="floating-menu-header">
+                <h3>Menu de Funcionalidades</h3>
+                <button class="menu-close" id="menu-close" aria-label="Fechar menu">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="floating-menu-content">
+                <a href="#" class="menu-item" data-action="add-ras">
+                    <i class="fas fa-x-ray"></i>
+                    <span>Inserir RAs TCs</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-2">
+                    <i class="fas fa-file-medical"></i>
+                    <span>Funcionalidade 2</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-3">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span>Funcionalidade 3</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-4">
+                    <i class="fas fa-calendar-check"></i>
+                    <span>Funcionalidade 4</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-5">
+                    <i class="fas fa-user-md"></i>
+                    <span>Funcionalidade 5</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-6">
+                    <i class="fas fa-hospital"></i>
+                    <span>Funcionalidade 6</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-7">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Funcionalidade 7</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-8">
+                    <i class="fas fa-database"></i>
+                    <span>Funcionalidade 8</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-9">
+                    <i class="fas fa-search"></i>
+                    <span>Funcionalidade 9</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-10">
+                    <i class="fas fa-download"></i>
+                    <span>Funcionalidade 10</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-11">
+                    <i class="fas fa-upload"></i>
+                    <span>Funcionalidade 11</span>
+                </a>
+                <a href="#" class="menu-item" data-action="func-12">
+                    <i class="fas fa-cog"></i>
+                    <span>Funcionalidade 12</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Título Destacado -->
+        <div class="title-section">
+            <div class="main-title">
+                <h1 class="title-main-text">AUTOREG</h1>
+                <p class="title-subtitle">Sistema Automatizado de operações G-HOSP e SISREG</p>
+            </div>
+        </div>
+
+        <!-- Área de Botões -->
+        <div class="buttons-section">
+            <div class="buttons-grid">
+                <!-- Botão 1 -->
+                <button type="button" class="glass-button" id="btn-add-ras">
+                    <i class="fas fa-x-ray"></i>
+                    <span>Inserir RAs TCs</span>
+                </button>
+                
+                <!-- Botão 2 -->
+                <button type="button" class="glass-button" id="btn-solicitar-tcs">
+                    <i class="fas fa-file-medical"></i>
+                    <span>Solicita Tomografias</span>
+                </button>
+                <button type="button" class="glass-button" id="btn-imprimir-tcs">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span>Imprimir Tomografias</span>
+                </button>
+                <button type="button" class="glass-button">
+                    <i class="fas fa-calendar-check"></i>
+                    <span>Funcionalidade 4</span>
+                </button>
+                <button type="button" class="glass-button">
+                    <i class="fas fa-user-md"></i>
+                    <span>Funcionalidade 5</span>
+                </button>
+                <button type="button" class="glass-button">
+                    <i class="fas fa-hospital"></i>
+                    <span>Funcionalidade 6</span>
+                </button>
+                <button type="button" class="glass-button">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Funcionalidade 7</span>
+                </button>
+                <button type="button" class="glass-button">
+                    <i class="fas fa-database"></i>
+                    <span>Funcionalidade 8</span>
+                </button>
+                <button type="button" class="glass-button">
+                    <i class="fas fa-search"></i>
+                    <span>Funcionalidade 9</span>
+                </button>
+                <button type="button" class="glass-button">
+                    <i class="fas fa-download"></i>
+                    <span>Funcionalidade 10</span>
+                </button>
+                <button type="button" class="glass-button">
+                    <i class="fas fa-upload"></i>
+                    <span>Funcionalidade 11</span>
+                </button>
+                <button type="button" class="glass-button">
+                    <i class="fas fa-cog"></i>
+                    <span>Funcionalidade 12</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Rodapé -->
+        <footer class="footer">
+            Copyright © 2025 por Michel Ribeiro Paes - 
+            <a href="https://www.michelpaes.adv.br" target="_blank">www.michelpaes.adv.br</a> - 
+            Todos os direitos reservados
+        </footer>
+    </div>
+
+    <!-- Modais -->
+    {% include 'modals/exames_solicitar.html' %}
+    {% include 'modals/solicitar_tomografias.html' %}
+    {% include 'modals/imprimir_tomografias.html' %}
+
+    <!-- Bootstrap JS local -->
+    <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+    
+    <!-- JavaScript principal -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/spreadsheet.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/solicitar_tcs.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/imprimir_tcs.js') }}"></script>
+</body>
+</html>
+

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUTOREG - Login</title>
+    
+    <!-- Bootstrap CSS local -->
+    <link href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+    
+    <!-- FontAwesome local -->
+    <link href="{{ url_for('static', filename='fontawesome/css/all.min.css') }}" rel="stylesheet">
+    
+    <!-- CSS Glassmorphism customizado -->
+    <link href="{{ url_for('static', filename='css/glassmorphism.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="login-container">
+        <!-- Logo como papel de parede (mesmo estilo da página principal) -->
+        
+        <!-- Card de Login -->
+        <div class="login-card glass-card">
+            <!-- Logo no topo do card -->
+            <div class="login-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="NIR/HUERB Logo" class="logo-image">
+            </div>
+            
+            <!-- Título -->
+            <div class="login-title-section">
+                <h1 class="login-main-title">AUTOREG</h1>
+                <p class="login-subtitle">Sistema Automatizado de operações G-HOSP e SISREG</p>
+            </div>
+            
+            <!-- Formulário de Login -->
+            <form id="login-form" class="login-form">
+                <div class="form-group">
+                    <label for="username" class="form-label">
+                        <i class="fas fa-user"></i> Usuário
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        class="form-control glass-input" 
+                        placeholder="Digite seu usuário"
+                        required
+                        autocomplete="username"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="form-label">
+                        <i class="fas fa-lock"></i> Senha
+                    </label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        class="form-control glass-input" 
+                        placeholder="Digite sua senha"
+                        required
+                        autocomplete="current-password"
+                    >
+                </div>
+                
+                <div id="login-error" class="alert alert-danger" style="display: none;"></div>
+                
+                <button type="submit" class="glass-button glass-button-primary login-button">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>Entrar</span>
+                </button>
+            </form>
+            
+            <!-- Informações de Copyright -->
+            <div class="login-footer">
+                <p class="copyright-text">
+                    Copyright © 2025 por Michel Ribeiro Paes - 
+                    <a href="https://www.michelpaes.adv.br" target="_blank">www.michelpaes.adv.br</a> - 
+                    Todos os direitos reservados
+                </p>
+                <p class="institution-text">
+                    Núcleo Interno de Regulação - NIR - HUERB
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bootstrap JS local -->
+    <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+    
+    <!-- JavaScript de Login -->
+    <script src="{{ url_for('static', filename='js/login.js') }}"></script>
+</body>
+</html>

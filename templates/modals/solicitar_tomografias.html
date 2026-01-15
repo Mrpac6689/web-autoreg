@@ -1,0 +1,44 @@
+<!-- Modal para Solicitar Tomografias -->
+<div class="glass-modal" id="modal-solicitar-tcs">
+    <div class="glass-modal-content modal-large">
+        <div class="modal-header">
+            <h2>Solicitar Tomografias</h2>
+            <button class="glass-modal-close" id="close-modal-solicitar-tcs">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="terminal-container">
+                <div class="terminal-header">
+                    <i class="fas fa-terminal"></i>
+                    <span>Saída do Terminal</span>
+                </div>
+                <div class="terminal-output" id="terminal-output">
+                    <div class="terminal-line">Aguardando início da execução...</div>
+                </div>
+            </div>
+            <div class="eta-container">
+                <div class="eta-label">
+                    <i class="fas fa-clock"></i>
+                    <span id="eta-label">Aguardando...</span>
+                </div>
+                <div class="eta-progress-bar">
+                    <div class="eta-progress-fill" id="eta-progress-fill"></div>
+                </div>
+                <div class="eta-status" id="eta-status">Pronto para iniciar</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="glass-button-action" id="btn-iniciar-solicitacao">
+                <i class="fas fa-play"></i> Iniciar
+            </button>
+            <button type="button" class="glass-button-action glass-button-danger" id="btn-interromper-solicitacao" style="display: none;">
+                <i class="fas fa-stop"></i> Interromper
+            </button>
+            <button type="button" class="glass-button-action" id="btn-fechar-solicitacao">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>
+

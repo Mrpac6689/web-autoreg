@@ -1,0 +1,26 @@
+# Configuração para Plesk/Apache
+# Habilita o mod_rewrite
+RewriteEngine On
+
+# Redireciona todas as requisições para o app Flask (via WSGI)
+# Ajuste conforme sua configuração do Plesk
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ /app.py/$1 [L]
+
+# Configurações de segurança
+<FilesMatch "\.(py|pyc|pyo)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Cache para arquivos estáticos
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+</IfModule>
+

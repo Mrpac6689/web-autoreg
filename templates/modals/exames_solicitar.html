@@ -1,0 +1,39 @@
+<!-- Modal para Inserir RAs TCs -->
+<div class="glass-modal" id="modal-exames-solicitar">
+    <div class="glass-modal-content modal-large">
+        <div class="modal-header">
+            <h2>Inserir RAs para Solicitar Tomografias</h2>
+            <button class="glass-modal-close" id="close-modal-exames">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="spreadsheet-container">
+                <table class="editable-spreadsheet" id="spreadsheet-ras">
+                    <thead id="spreadsheet-header">
+                        <!-- Cabeçalho será preenchido dinamicamente -->
+                    </thead>
+                    <tbody id="spreadsheet-body">
+                        <!-- Dados serão preenchidos dinamicamente -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="spreadsheet-info">
+                <i class="fas fa-info-circle"></i>
+                <p>Preencha a planilha com os números de Registro de Atendimento a serem solicitados. Caso existam informações anteriores, pressione "Limpar". Todos os RAs presentes no arquivo serão solicitados.</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="glass-button-action" id="btn-limpar-ras">
+                <i class="fas fa-trash-alt"></i> Limpar
+            </button>
+            <button type="button" class="glass-button-action" id="btn-salvar-ras">
+                <i class="fas fa-save"></i> Salvar
+            </button>
+            <button type="button" class="glass-button-action" id="btn-sair-ras">
+                <i class="fas fa-times"></i> Sair
+            </button>
+        </div>
+    </div>
+</div>
+

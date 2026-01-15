@@ -1,0 +1,32 @@
+<!-- Modal para Imprimir Tomografias -->
+<div class="glass-modal" id="modal-imprimir-tcs">
+    <div class="glass-modal-content modal-large">
+        <div class="modal-header">
+            <h2>Imprimir Tomografias</h2>
+            <button class="glass-modal-close" id="close-modal-imprimir-tcs">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="pdf-viewer-container">
+                <iframe 
+                    id="pdf-viewer" 
+                    src="" 
+                    class="pdf-viewer"
+                    title="Visualizador de PDF">
+                    Seu navegador não suporta visualização de PDF. 
+                    <a href="{{ url_for('api_imprimir_tcs_pdf') }}" target="_blank">Clique aqui para baixar o PDF</a>.
+                </iframe>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="glass-button-action" id="btn-imprimir-pdf">
+                <i class="fas fa-print"></i> Imprimir
+            </button>
+            <button type="button" class="glass-button-action" id="btn-sair-imprimir">
+                <i class="fas fa-times"></i> Sair
+            </button>
+        </div>
+    </div>
+</div>
+
