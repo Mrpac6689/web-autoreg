@@ -291,6 +291,33 @@ function adicionarLinhaTerminal(texto) {
 }
 
 /**
+ * Registra execução no relatório CSV
+ */
+function registrarRelatorio(rotina, registros) {
+    fetch('/api/relatorio/registrar', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            rotina: rotina,
+            registros: registros
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Relatório registrado com sucesso:', data);
+        } else {
+            console.error('Erro ao registrar relatório:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao registrar relatório:', error);
+    });
+}
+
+/**
  * Atualiza a barra ETA
  */
 function atualizarETA(label, progresso, status) {
@@ -323,9 +350,32 @@ function finalizarExecucao(sucesso) {
     if (sucesso) {
         atualizarETA('Concluído!', 100, 'Todos os comandos executados com sucesso');
         adicionarLinhaTerminal('\n✅ Execução concluída com sucesso!');
+        
+        // Contar registros no CSV e registrar no relatório
+        contarERegistrarRelatorio();
     } else {
         atualizarETA('Erro na execução', 0, 'Execução interrompida');
     }
+}
+
+/**
+ * Conta os registros no CSV e registra no relatório
+ */
+function contarERegistrarRelatorio() {
+    fetch('/api/exames-solicitar/count')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const registros = data.registros || 0;
+                // Registrar no relatório
+                registrarRelatorio('Solicitar Tomografias', registros);
+            } else {
+                console.error('Erro ao contar registros:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao contar registros:', error);
+        });
 }
 
 /**

@@ -308,6 +308,17 @@ body::before {
     align-items: center;
     justify-content: center;
     padding: 20px;
+    pointer-events: none;
+}
+
+/* Conteúdo do modal deve receber eventos de ponteiro */
+.glass-modal.active .glass-modal-content {
+    pointer-events: auto;
+}
+
+/* Modal de visualizar robô sempre acima de outros modais */
+#modal-visualizar-robo {
+    z-index: 10001 !important;
 }
 
 .glass-modal.active {
@@ -338,6 +349,23 @@ body::before {
     width: 95%;
 }
 
+.glass-modal-content.modal-small {
+    max-width: 400px;
+    width: 90%;
+}
+
+.glass-modal-content.modal-extra-large {
+    max-width: 95%;
+    width: 95%;
+    max-height: 95vh;
+}
+
+.glass-modal-content.modal-extra-large .modal-body {
+    padding: 15px 20px;
+    max-height: calc(95vh - 150px);
+    overflow-y: auto;
+}
+
 .modal-header {
     padding: 20px 30px;
     border-bottom: 1px solid var(--glass-border);
@@ -345,6 +373,7 @@ body::before {
     justify-content: space-between;
     align-items: center;
     background: rgba(255, 255, 255, 0.05);
+    position: relative;
 }
 
 .modal-header h2 {
@@ -476,6 +505,21 @@ body::before {
 
 .editable-spreadsheet tbody tr:hover {
     background: rgba(255, 255, 255, 0.03);
+}
+
+/* Seleção de células e linhas */
+.editable-spreadsheet td.selected {
+    background: rgba(33, 150, 243, 0.3) !important;
+    outline: 2px solid rgba(33, 150, 243, 0.6);
+    outline-offset: -2px;
+}
+
+.editable-spreadsheet tbody tr.row-selected td {
+    background: rgba(33, 150, 243, 0.25) !important;
+}
+
+.editable-spreadsheet tbody tr.row-selected td.selected {
+    background: rgba(33, 150, 243, 0.4) !important;
 }
 
 .spreadsheet-info {
@@ -633,9 +677,6 @@ body::before {
 }
 
 .glass-modal-close {
-    position: absolute;
-    top: 15px;
-    right: 20px;
     background: rgba(255, 255, 255, 0.2);
     border: 1px solid var(--glass-border);
     border-top: 1px solid var(--glass-border-top);
@@ -649,6 +690,16 @@ body::before {
     color: var(--text-light);
     font-size: 1.5rem;
     transition: all 0.3s ease;
+    position: absolute;
+    top: 15px;
+    right: 20px;
+}
+
+/* Para modais com modal-header-actions, o botão fica dentro do flex */
+.modal-header-actions .glass-modal-close {
+    position: relative;
+    top: auto;
+    right: auto;
 }
 
 .glass-modal-close:hover {
@@ -1327,9 +1378,9 @@ body::before {
 
 /* Botão flutuante no canto inferior direito */
 .floating-action-button {
-    position: fixed;
-    bottom: 30px;
-    right: 30px;
+    position: fixed !important;
+    bottom: 30px !important;
+    right: 30px !important;
     width: 60px;
     height: 60px;
     background: var(--glass-bg);
@@ -1346,7 +1397,9 @@ body::before {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 999;
+    z-index: 99999 !important;
+    pointer-events: auto !important;
+    isolation: isolate;
 }
 
 .floating-action-button:hover {
@@ -1378,25 +1431,27 @@ body::before {
     border-radius: 12px;
     overflow: hidden;
     box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
-    min-height: 500px;
-    max-height: 75vh;
+    flex: 1;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .robo-iframe {
     width: 100%;
     height: 100%;
-    min-height: 500px;
+    flex: 1;
     border: none;
     background: white;
+    min-height: 0;
 }
 
 /* Ajustar modal para iframe grande */
 .glass-modal-content.modal-large.modal-iframe {
     max-width: 95%;
     width: 95%;
-    max-height: 95vh;
+    max-height: 98vh;
+    height: 98vh;
 }
 
 .glass-modal-content.modal-large.modal-iframe .modal-body {
@@ -1405,6 +1460,40 @@ body::before {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
+}
+
+/* Ações no header do modal */
+.modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.glass-modal-reload {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(5px);
+    border: 1px solid var(--glass-border);
+    border-top: 1px solid var(--glass-border-top);
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+
+.glass-modal-reload:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg);
+}
+
+.glass-modal-reload:active {
+    transform: translateY(0);
 }
 
 /* Responsividade para botão flutuante */

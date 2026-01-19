@@ -7,6 +7,12 @@ let originalData = [];
 let isEdited = false;
 let currentModal = null;
 
+// Sistema de seleção
+let selectionStartCell = null;
+let selectedCells = new Set();
+let selectedRows = new Set();
+let isSelectingWithKeyboard = false; // Flag para evitar limpar seleção durante seleção com teclado
+
 /**
  * Inicializa o modal da planilha
  */
@@ -38,7 +44,12 @@ function initSpreadsheetModal() {
     
     if (btnSalvar) {
         btnSalvar.addEventListener('click', function() {
-            salvarPlanilha();
+            salvarPlanilha().then(() => {
+                // Fechar modal após salvar com sucesso
+                doCloseModal();
+            }).catch(() => {
+                // Erro ao salvar - modal permanece aberto
+            });
         });
     }
     
@@ -80,18 +91,71 @@ function openSpreadsheetModal() {
 }
 
 /**
+ * Função auxiliar para confirmação com botões Sim/Não
+ */
+function confirmSimNao(mensagem) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('modal-confirm-dialog');
+        const messageEl = document.getElementById('confirm-message');
+        const btnSim = document.getElementById('btn-confirm-sim');
+        const btnNao = document.getElementById('btn-confirm-nao');
+        
+        if (!modal || !messageEl || !btnSim || !btnNao) {
+            // Fallback para confirm nativo se o modal não existir
+            resolve(confirm(mensagem));
+            return;
+        }
+        
+        messageEl.textContent = mensagem;
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        modal.classList.add('active');
+        
+        const cleanup = () => {
+            modal.classList.remove('active');
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+            btnSim.onclick = null;
+            btnNao.onclick = null;
+            // Remover listener do overlay
+            modal.onclick = null;
+        };
+        
+        // Fechar ao clicar no overlay (fora do modal)
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                cleanup();
+                resolve(false);
+            }
+        };
+        
+        btnSim.onclick = () => {
+            cleanup();
+            resolve(true);
+        };
+        
+        btnNao.onclick = () => {
+            cleanup();
+            resolve(false);
+        };
+    });
+}
+
+/**
  * Fecha o modal com verificação de edições
  */
-function closeSpreadsheetModal() {
+async function closeSpreadsheetModal() {
     if (isEdited) {
-        if (confirm('Você tem alterações não salvas. Deseja salvar antes de sair?')) {
+        const resposta1 = await confirmSimNao('Você tem alterações não salvas. Deseja salvar antes de sair?');
+        if (resposta1) {
             salvarPlanilha().then(() => {
                 doCloseModal();
             }).catch(() => {
                 // Usuário cancelou ou erro ao salvar
             });
         } else {
-            if (confirm('Tem certeza que deseja sair sem salvar?')) {
+            const resposta2 = await confirmSimNao('Tem certeza que deseja sair sem salvar?');
+            if (resposta2) {
                 doCloseModal();
             }
         }
@@ -241,12 +305,31 @@ function renderSpreadsheet() {
             
             td.addEventListener('keydown', keydownHandler, true); // Usar capture phase para garantir que seja executado primeiro
             
-            td.addEventListener('focus', function() {
-                // Selecionar todo o texto ao focar (exceto se estiver editando)
-                if (this.textContent) {
+            td.addEventListener('focus', function(e) {
+                // Se não estiver fazendo seleção com teclado e não estiver com Shift pressionado, limpar seleção anterior
+                if (!isSelectingWithKeyboard && !e.shiftKey) {
+                    clearSelection();
+                }
+                // Só selecionar a célula se não estiver fazendo seleção com teclado
+                if (!isSelectingWithKeyboard) {
+                    selectCell(this);
+                }
+                
+                // Selecionar todo o texto ao focar (exceto se estiver editando ou fazendo seleção com teclado)
+                if (this.textContent && !isSelectingWithKeyboard) {
                     setTimeout(() => {
                         selectCellText(this);
                     }, 0);
+                }
+            });
+            
+            td.addEventListener('click', function(e) {
+                if (e.shiftKey && selectionStartCell) {
+                    selectRange(selectionStartCell, this);
+                } else {
+                    clearSelection();
+                    selectCell(this);
+                    selectionStartCell = this;
                 }
             });
             
@@ -322,12 +405,31 @@ function addEmptyRow() {
             }
         }, true); // Usar capture phase para garantir que seja executado primeiro
         
-        td.addEventListener('focus', function() {
-            // Selecionar todo o texto ao focar (exceto se estiver editando)
-            if (this.textContent) {
+        td.addEventListener('focus', function(e) {
+            // Se não estiver fazendo seleção com teclado e não estiver com Shift pressionado, limpar seleção anterior
+            if (!isSelectingWithKeyboard && !e.shiftKey) {
+                clearSelection();
+            }
+            // Só selecionar a célula se não estiver fazendo seleção com teclado
+            if (!isSelectingWithKeyboard) {
+                selectCell(this);
+            }
+            
+            // Selecionar todo o texto ao focar (exceto se estiver editando ou fazendo seleção com teclado)
+            if (this.textContent && !isSelectingWithKeyboard) {
                 setTimeout(() => {
                     selectCellText(this);
                 }, 0);
+            }
+        });
+        
+        td.addEventListener('click', function(e) {
+            if (e.shiftKey && selectionStartCell) {
+                selectRange(selectionStartCell, this);
+            } else {
+                clearSelection();
+                selectCell(this);
+                selectionStartCell = this;
             }
         });
         
@@ -460,6 +562,153 @@ function checkForEdits() {
 }
 
 /**
+ * Limpa a seleção atual
+ */
+function clearSelection() {
+    selectedCells.forEach(cell => {
+        cell.classList.remove('selected');
+    });
+    selectedCells.clear();
+    
+    selectedRows.forEach(rowIndex => {
+        const body = document.getElementById('spreadsheet-body');
+        if (body && body.children[rowIndex - 1]) {
+            body.children[rowIndex - 1].classList.remove('row-selected');
+        }
+    });
+    selectedRows.clear();
+    
+    selectionStartCell = null;
+}
+
+/**
+ * Seleciona uma célula
+ */
+function selectCell(cell, addToSelection = false) {
+    if (!addToSelection) {
+        clearSelection();
+        selectionStartCell = cell;
+    }
+    
+    cell.classList.add('selected');
+    selectedCells.add(cell);
+}
+
+/**
+ * Seleciona uma linha inteira
+ */
+function selectRow(rowIndex, addToSelection = false) {
+    if (!addToSelection) {
+        clearSelection();
+    }
+    
+    const body = document.getElementById('spreadsheet-body');
+    if (!body || rowIndex < 1) return;
+    
+    const bodyRow = rowIndex - 1;
+    if (bodyRow >= body.children.length) return;
+    
+    const row = body.children[bodyRow];
+    if (!row) return;
+    
+    row.classList.add('row-selected');
+    selectedRows.add(rowIndex);
+    
+    // Selecionar todas as células da linha
+    Array.from(row.children).forEach(cell => {
+        cell.classList.add('selected');
+        selectedCells.add(cell);
+    });
+}
+
+/**
+ * Seleciona um range de células
+ */
+function selectRange(startCell, endCell) {
+    // Não limpar seleção aqui - vamos apenas expandir
+    // clearSelection();
+    
+    const startRow = parseInt(startCell.dataset.row);
+    const startCol = parseInt(startCell.dataset.col);
+    const endRow = parseInt(endCell.dataset.row);
+    const endCol = parseInt(endCell.dataset.col);
+    
+    const minRow = Math.min(startRow, endRow);
+    const maxRow = Math.max(startRow, endRow);
+    const minCol = Math.min(startCol, endCol);
+    const maxCol = Math.max(startCol, endCol);
+    
+    const body = document.getElementById('spreadsheet-body');
+    if (!body) return;
+    
+    // Limpar apenas células que não estão no novo range
+    selectedCells.forEach(cell => {
+        const cellRow = parseInt(cell.dataset.row);
+        const cellCol = parseInt(cell.dataset.col);
+        if (cellRow < minRow || cellRow > maxRow || cellCol < minCol || cellCol > maxCol) {
+            cell.classList.remove('selected');
+            selectedCells.delete(cell);
+        }
+    });
+    
+    // Adicionar células do range
+    for (let r = minRow; r <= maxRow; r++) {
+        const bodyRow = r - 1;
+        if (bodyRow < 0 || bodyRow >= body.children.length) continue;
+        
+        const row = body.children[bodyRow];
+        if (!row) continue;
+        
+        for (let c = minCol; c <= maxCol; c++) {
+            if (c >= row.children.length) continue;
+            const cell = row.children[c];
+            if (!selectedCells.has(cell)) {
+                cell.classList.add('selected');
+                selectedCells.add(cell);
+            }
+        }
+    }
+}
+
+/**
+ * Remove linhas selecionadas
+ */
+function removeSelectedRows() {
+    const rowsToRemove = new Set();
+    
+    // Adicionar linhas explicitamente selecionadas
+    selectedRows.forEach(rowIndex => {
+        if (rowIndex > 0) { // Não remover cabeçalho
+            rowsToRemove.add(rowIndex);
+        }
+    });
+    
+    // Adicionar linhas identificadas através de células selecionadas
+    selectedCells.forEach(cell => {
+        if (cell && cell.dataset && cell.dataset.row) {
+            const row = parseInt(cell.dataset.row);
+            if (row > 0 && !isNaN(row)) { // Não remover cabeçalho
+                rowsToRemove.add(row);
+            }
+        }
+    });
+    
+    if (rowsToRemove.size === 0) return;
+    
+    // Remover linhas em ordem decrescente para não afetar índices
+    const sortedRows = Array.from(rowsToRemove).sort((a, b) => b - a);
+    sortedRows.forEach(rowIndex => {
+        if (rowIndex < spreadsheetData.length) {
+            spreadsheetData.splice(rowIndex, 1);
+        }
+    });
+    
+    clearSelection();
+    renderSpreadsheet();
+    checkForEdits();
+}
+
+/**
  * Manipula teclas na célula
  * Retorna false se o evento foi tratado e não deve propagar
  */
@@ -474,6 +723,229 @@ function handleCellKeydown(e, cell) {
     // Mas body.children usa índice baseado em 0 (0 = primeira linha no body)
     // Então bodyRow = row - 1 (porque row 1 em spreadsheetData = índice 0 no body)
     const bodyRow = row - 1;
+    
+    // Delete - remover linhas selecionadas
+    if (e.key === 'Delete' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+        // Verificar se há seleção de texto dentro da célula atual
+        const selection = window.getSelection();
+        let isEditingCell = false;
+        
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            // Verificar se a seleção está dentro da célula atual
+            if (cell.contains(range.commonAncestorContainer) || cell === range.commonAncestorContainer) {
+                // Verificar se há texto selecionado (não apenas cursor)
+                if (range.toString().length > 0) {
+                    isEditingCell = true;
+                }
+            }
+        }
+        
+        // Se estiver editando texto dentro da célula, permitir comportamento padrão
+        if (isEditingCell) {
+            return true; // Permitir comportamento padrão (deletar texto)
+        }
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Se não há células ou linhas selecionadas, selecionar a célula atual
+        if (selectedRows.size === 0 && selectedCells.size === 0) {
+            selectCell(cell);
+        }
+        
+        // Calcular número de linhas únicas que serão removidas
+        const rowsToRemove = new Set();
+        selectedRows.forEach(rowIndex => {
+            if (rowIndex > 0) rowsToRemove.add(rowIndex);
+        });
+        selectedCells.forEach(selectedCell => {
+            if (selectedCell && selectedCell.dataset && selectedCell.dataset.row) {
+                const row = parseInt(selectedCell.dataset.row);
+                if (row > 0 && !isNaN(row)) {
+                    rowsToRemove.add(row);
+                }
+            }
+        });
+        
+        const numLinhas = rowsToRemove.size;
+        if (numLinhas > 0) {
+            confirmSimNao(`Tem certeza que deseja remover ${numLinhas} linha(s)?`).then((resposta) => {
+                if (resposta) {
+                    removeSelectedRows();
+                }
+            });
+        } else {
+            // Se não há linhas para remover, apenas limpar seleção
+            clearSelection();
+        }
+        return false;
+    }
+    
+    // Shift + setas - seleção
+    if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Se não houver célula inicial, usar a célula atual
+        if (!selectionStartCell) {
+            selectionStartCell = cell;
+            // Selecionar a célula inicial também
+            selectCell(cell);
+        }
+        
+        let targetCell = null;
+        const numCols = spreadsheetData[0].length;
+        
+        if (e.key === 'ArrowLeft') {
+            // Selecionar célula à esquerda
+            if (col > 0) {
+                const currentRow = body.children[bodyRow];
+                if (currentRow && currentRow.children[col - 1]) {
+                    targetCell = currentRow.children[col - 1];
+                }
+            } else if (bodyRow > 0) {
+                // Se estiver na primeira coluna, selecionar última coluna da linha anterior
+                const prevRow = body.children[bodyRow - 1];
+                if (prevRow && prevRow.children[numCols - 1]) {
+                    targetCell = prevRow.children[numCols - 1];
+                }
+            }
+        } else if (e.key === 'ArrowRight') {
+            // Selecionar célula à direita
+            if (col < numCols - 1) {
+                const currentRow = body.children[bodyRow];
+                if (currentRow && currentRow.children[col + 1]) {
+                    targetCell = currentRow.children[col + 1];
+                }
+            } else if (bodyRow < body.children.length - 1) {
+                // Se estiver na última coluna, selecionar primeira coluna da próxima linha
+                const nextRow = body.children[bodyRow + 1];
+                if (nextRow && nextRow.children[0]) {
+                    targetCell = nextRow.children[0];
+                }
+            }
+        } else if (e.key === 'ArrowUp') {
+            // Selecionar célula acima
+            if (bodyRow > 0) {
+                const prevRow = body.children[bodyRow - 1];
+                if (prevRow && prevRow.children[col]) {
+                    targetCell = prevRow.children[col];
+                }
+            }
+        } else if (e.key === 'ArrowDown') {
+            // Selecionar célula abaixo
+            if (bodyRow < body.children.length - 1) {
+                const nextRow = body.children[bodyRow + 1];
+                if (nextRow && nextRow.children[col]) {
+                    targetCell = nextRow.children[col];
+                }
+            }
+        }
+        
+        if (targetCell) {
+            // Marcar que estamos fazendo seleção com teclado
+            isSelectingWithKeyboard = true;
+            
+            // Expandir seleção do início até a célula alvo
+            selectRange(selectionStartCell, targetCell);
+            
+            // Atualizar a célula atual antes de mover o foco
+            updateCellData(cell);
+            
+            // Mover foco para a célula alvo sem limpar seleção
+            targetCell.focus();
+            
+            // Não selecionar texto da célula, apenas manter o foco visual
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                selection.removeAllRanges();
+            }
+            
+            // Resetar flag após um pequeno delay para permitir que o event listener de focus execute
+            setTimeout(() => {
+                isSelectingWithKeyboard = false;
+            }, 10);
+        }
+        
+        return false;
+    }
+    
+    // Setas sem Shift - navegação
+    if (!e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        // Se houver seleção, limpar antes de navegar
+        if (selectedCells.size > 0 || selectedRows.size > 0) {
+            clearSelection();
+        }
+        
+        // Verificar se está no início/fim do texto para navegar
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const cellText = cell.textContent;
+            
+            if (e.key === 'ArrowLeft' && range.startOffset > 0) {
+                return true; // Deixar comportamento padrão
+            }
+            if (e.key === 'ArrowRight' && range.startOffset < cellText.length) {
+                return true; // Deixar comportamento padrão
+            }
+        }
+        
+        e.preventDefault();
+        e.stopPropagation();
+        updateCellData(cell);
+        
+        if (e.key === 'ArrowLeft') {
+            if (col > 0) {
+                const currentRow = body.children[bodyRow];
+                if (currentRow && currentRow.children[col - 1]) {
+                    currentRow.children[col - 1].focus();
+                    moveCursorToEnd(currentRow.children[col - 1]);
+                }
+            } else if (bodyRow > 0) {
+                const prevRow = body.children[bodyRow - 1];
+                const numCols = spreadsheetData[0].length;
+                if (prevRow && prevRow.children[numCols - 1]) {
+                    prevRow.children[numCols - 1].focus();
+                    moveCursorToEnd(prevRow.children[numCols - 1]);
+                }
+            }
+        } else if (e.key === 'ArrowRight') {
+            const numCols = spreadsheetData[0].length;
+            if (col < numCols - 1) {
+                const currentRow = body.children[bodyRow];
+                if (currentRow && currentRow.children[col + 1]) {
+                    currentRow.children[col + 1].focus();
+                    moveCursorToStart(currentRow.children[col + 1]);
+                }
+            } else if (bodyRow < body.children.length - 1) {
+                const nextRow = body.children[bodyRow + 1];
+                if (nextRow && nextRow.children[0]) {
+                    nextRow.children[0].focus();
+                    moveCursorToStart(nextRow.children[0]);
+                }
+            }
+        } else if (e.key === 'ArrowUp') {
+            if (bodyRow > 0) {
+                const prevRow = body.children[bodyRow - 1];
+                if (prevRow && prevRow.children[col]) {
+                    prevRow.children[col].focus();
+                    moveCursorToEnd(prevRow.children[col]);
+                }
+            }
+        } else if (e.key === 'ArrowDown') {
+            if (bodyRow < body.children.length - 1) {
+                const nextRow = body.children[bodyRow + 1];
+                if (nextRow && nextRow.children[col]) {
+                    nextRow.children[col].focus();
+                    moveCursorToStart(nextRow.children[col]);
+                }
+            }
+        }
+        
+        return false;
+    }
     
     // Tab - próxima célula à direita (ou primeira coluna da próxima linha se estiver na última coluna)
     if (e.key === 'Tab') {
@@ -515,7 +987,7 @@ function handleCellKeydown(e, cell) {
         return false;
     }
     
-    // Enter - próxima linha, mesma coluna (exceto coluna hora que vai para coluna ra abaixo)
+    // Enter - próxima linha, mesma coluna (exceto coluna hora e cns que vão para coluna ra abaixo)
     if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
@@ -523,8 +995,8 @@ function handleCellKeydown(e, cell) {
         // Salvar o conteúdo atual antes de mover
         updateCellData(cell);
         
-        // Se estiver na coluna hora (col 1), ir para a célula abaixo na coluna ra (col 0)
-        if (col === 1) {
+        // Se estiver na coluna hora (col 1) ou cns (col 2), ir para a célula abaixo na coluna ra (col 0)
+        if (col === 1 || col === 2) {
             const targetCol = 0; // Coluna ra
             
             // Se estiver na última linha, adicionar uma nova
@@ -722,8 +1194,9 @@ function moveCursorToStart(cell) {
 /**
  * Limpa a planilha (mantém apenas o cabeçalho)
  */
-function limparPlanilha() {
-    if (confirm('Tem certeza que deseja limpar todos os dados? O cabeçalho será mantido.')) {
+async function limparPlanilha() {
+    const resposta = await confirmSimNao('Tem certeza que deseja limpar todos os dados? O cabeçalho será mantido.');
+    if (resposta) {
         if (spreadsheetData.length > 0) {
             spreadsheetData = [spreadsheetData[0]]; // Manter apenas o cabeçalho
             renderSpreadsheet();

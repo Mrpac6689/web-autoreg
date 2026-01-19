@@ -59,9 +59,9 @@
                     <i class="fas fa-clipboard-list"></i>
                     <span>Funcionalidade 3</span>
                 </a>
-                <a href="#" class="menu-item" data-action="func-4">
+                <a href="#" class="menu-item" data-action="prepara-sol-internacoes">
                     <i class="fas fa-calendar-check"></i>
-                    <span>Funcionalidade 4</span>
+                    <span>Preparar Solicitações</span>
                 </a>
                 <a href="#" class="menu-item" data-action="func-5">
                     <i class="fas fa-user-md"></i>
@@ -124,9 +124,9 @@
                     <i class="fas fa-clipboard-list"></i>
                     <span>Imprimir Tomografias</span>
                 </button>
-                <button type="button" class="glass-button">
+                <button type="button" class="glass-button" id="btn-prepara-sol-internacoes">
                     <i class="fas fa-calendar-check"></i>
-                    <span>Funcionalidade 4</span>
+                    <span>Preparar Solicitações</span>
                 </button>
                 <button type="button" class="glass-button">
                     <i class="fas fa-user-md"></i>
@@ -181,6 +181,8 @@
     {% include 'modals/solicitar_tomografias.html' %}
     {% include 'modals/imprimir_tomografias.html' %}
     {% include 'modals/visualizar_robo.html' %}
+    {% include 'modals/internacoes_solicitar.html' %}
+    {% include 'modals/confirm_dialog.html' %}
 
     <!-- Bootstrap JS local -->
     <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
@@ -190,6 +192,7 @@
     <script src="{{ url_for('static', filename='js/spreadsheet.js') }}"></script>
     <script src="{{ url_for('static', filename='js/solicitar_tcs.js') }}"></script>
     <script src="{{ url_for('static', filename='js/imprimir_tcs.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/internacoes_solicitar.js') }}"></script>
 </body>
 </html>
 

@@ -312,6 +312,43 @@ def save_exames_csv():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/exames-solicitar/count', methods=['GET'])
+@login_required
+def count_exames_csv():
+    """Conta o número de registros no arquivo CSV (linhas - cabeçalho)"""
+    csv_path = Path(WORKDIR) / 'exames_solicitar.csv'
+    
+    try:
+        # Verificar se o arquivo existe
+        if not csv_path.exists():
+            return jsonify({
+                'success': True,
+                'registros': 0,
+                'total_linhas': 0
+            })
+        
+        # Contar linhas no arquivo
+        total_linhas = 0
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                total_linhas += 1
+        
+        # Número de registros = total de linhas - 1 (cabeçalho)
+        registros = max(0, total_linhas - 1)
+        
+        return jsonify({
+            'success': True,
+            'registros': registros,
+            'total_linhas': total_linhas
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/solicitar-tcs/executar', methods=['POST'])
 @login_required
 def executar_solicitacao_tcs():
@@ -1730,6 +1767,320 @@ def robo_ws_proxy():
         'target_url': target_ws_url,
         'note': 'O script JavaScript injetado no HTML reescreverá automaticamente as conexões WebSocket'
     }), 426  # 426 Upgrade Required
+
+
+def registrar_relatorio(rotina: str, usuario: str, registros: int):
+    """
+    Registra uma execução de rotina no arquivo relatorio.csv
+    
+    Args:
+        rotina: Nome da rotina executada
+        usuario: Nome do usuário que executou
+        registros: Número de registros processados
+    """
+    relatorio_path = Path(__file__).parent / 'relatorio.csv'
+    
+    # Cabeçalho do CSV
+    CABECALHO = ['data', 'hora', 'rotina', 'usuario', 'registros']
+    
+    try:
+        # Verificar se o arquivo existe
+        arquivo_existe = relatorio_path.exists()
+        
+        # Obter data e hora atual
+        agora = datetime.now()
+        data = agora.strftime('%d/%m/%Y')
+        hora = agora.strftime('%H:%M:%S')
+        
+        # Abrir arquivo em modo append (ou criar se não existir)
+        with open(relatorio_path, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            
+            # Se o arquivo não existe ou está vazio, escrever cabeçalho
+            if not arquivo_existe or relatorio_path.stat().st_size == 0:
+                writer.writerow(CABECALHO)
+            
+            # Escrever linha de dados
+            writer.writerow([data, hora, rotina, usuario, registros])
+        
+        return True
+    except Exception as e:
+        print(f"Erro ao registrar relatório: {e}")
+        return False
+
+
+@app.route('/api/relatorio/registrar', methods=['POST'])
+@login_required
+def api_registrar_relatorio():
+    """API para registrar execução de rotina no relatório CSV"""
+    try:
+        data = request.json or {}
+        rotina = data.get('rotina', '').strip()
+        registros = data.get('registros', 0)
+        
+        # Validar dados
+        if not rotina:
+            return jsonify({'success': False, 'error': 'Rotina é obrigatória'}), 400
+        
+        try:
+            registros = int(registros)
+            if registros < 0:
+                return jsonify({'success': False, 'error': 'Número de registros deve ser positivo'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Número de registros inválido'}), 400
+        
+        # Obter usuário atual
+        usuario = current_user.username if current_user.is_authenticated else 'Desconhecido'
+        
+        # Registrar no CSV
+        sucesso = registrar_relatorio(rotina, usuario, registros)
+        
+        if sucesso:
+            return jsonify({
+                'success': True,
+                'message': 'Relatório registrado com sucesso'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Erro ao registrar relatório'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/internacoes-solicitar/load', methods=['GET'])
+@login_required
+def load_internacoes_csv():
+    """Carrega o conteúdo do arquivo CSV de internações para solicitar"""
+    csv_path = Path(WORKDIR) / 'solicita_inf_aih.csv'
+    
+    # Cabeçalho padrão do CSV (ajustar conforme necessário)
+    CABECALHO_PADRAO = ['ra', 'data', 'hora', 'cns', 'procedimento', 'chave']
+    
+    try:
+        # Garantir que o diretório existe
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Se o arquivo não existir, criar com cabeçalho padrão
+        arquivo_criado = False
+        if not csv_path.exists():
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(CABECALHO_PADRAO)
+            arquivo_criado = True
+        
+        # Ler o CSV
+        data = []
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                data.append(row)
+        
+        # Se o arquivo estava vazio ou só tinha cabeçalho, garantir que tem pelo menos o cabeçalho
+        if not data or len(data) == 0:
+            data = [CABECALHO_PADRAO]
+            # Salvar o cabeçalho
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(CABECALHO_PADRAO)
+            arquivo_criado = True
+        
+        # Verificar se a primeira linha é o cabeçalho válido
+        if len(data) > 0:
+            # Se a primeira linha estiver vazia ou não tiver o número correto de colunas, substituir pelo cabeçalho
+            if len(data[0]) == 0 or len(data[0]) != len(CABECALHO_PADRAO):
+                data[0] = CABECALHO_PADRAO
+                with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerows(data)
+                arquivo_criado = True
+        
+        return jsonify({
+            'success': True, 
+            'data': data,
+            'arquivo_criado': arquivo_criado
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/internacoes-solicitar/save', methods=['POST'])
+@login_required
+def save_internacoes_csv():
+    """Salva o conteúdo editado no arquivo CSV"""
+    try:
+        data = request.json.get('data', [])
+        csv_path = Path(WORKDIR) / 'solicita_inf_aih.csv'
+        
+        # Cabeçalho padrão que DEVE ser preservado
+        CABECALHO_PADRAO = ['ra', 'data', 'hora', 'cns', 'procedimento', 'chave']
+        
+        # Garantir que o diretório existe
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Garantir que a primeira linha sempre seja o cabeçalho correto
+        if len(data) > 0:
+            # Forçar cabeçalho na primeira posição
+            data[0] = CABECALHO_PADRAO
+        else:
+            # Se não houver dados, criar apenas com cabeçalho
+            data = [CABECALHO_PADRAO]
+        
+        # Salvar o CSV
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerows(data)
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/internacoes-solicitar/buscar-pendentes', methods=['POST'])
+@login_required
+def executar_buscar_pendentes():
+    """Executa o comando -aihs do autoreg com streaming em tempo real"""
+    data = request.json or {}
+    session_id = data.get('session_id', str(threading.current_thread().ident))
+    
+    def gerar():
+        nonlocal session_id
+        try:
+            # Construir comando completo
+            # Adicionar -u para unbuffered output se for Python
+            if 'python' in PYTHONPATH.lower():
+                comando_original = [PYTHONPATH, '-u', AUTOREGPATH, '-aihs']
+            else:
+                comando_original = [PYTHONPATH, AUTOREGPATH, '-aihs']
+            
+            # Verificar container antes de executar (apenas se USE_DOCKER estiver ativado)
+            if USE_DOCKER and DOCKER_CONTAINER:
+                container_ok, mensagem = verificar_container_docker()
+                if not container_ok:
+                    yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': f'Container Docker não acessível: {mensagem}'})}\n\n"
+                    return
+            
+            # Construir comando com Docker se necessário
+            comando = construir_comando_docker(comando_original)
+            
+            # Enviar início do comando
+            yield f"data: {json.dumps({'tipo': 'inicio', 'comando': ' '.join(comando)})}\n\n"
+            
+            # Executar comando com streaming
+            env = os.environ.copy()
+            env['PYTHONUNBUFFERED'] = '1'
+            
+            cwd_exec = None if (USE_DOCKER and DOCKER_CONTAINER) else WORKDIR
+            
+            processo = subprocess.Popen(
+                comando,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=0,
+                universal_newlines=True,
+                cwd=cwd_exec,
+                env=env
+            )
+            
+            # Armazenar processo para permitir interrupção
+            with processos_lock:
+                processos_ativos[session_id] = processo
+            
+            # Ler saída caractere por caractere para streaming verdadeiro
+            buffer_linha = ''
+            while True:
+                char = processo.stdout.read(1)
+                if not char:
+                    if processo.poll() is not None:
+                        if buffer_linha.strip():
+                            yield f"data: {json.dumps({'tipo': 'output', 'linha': buffer_linha.rstrip()})}\n\n"
+                        break
+                    continue
+                
+                buffer_linha += char
+                
+                if char == '\n':
+                    linha_limpa = buffer_linha.rstrip()
+                    if linha_limpa:
+                        yield f"data: {json.dumps({'tipo': 'output', 'linha': linha_limpa})}\n\n"
+                    buffer_linha = ''
+            
+            # Aguardar término do processo
+            processo.wait()
+            
+            # Remover processo da lista de ativos
+            with processos_lock:
+                if session_id in processos_ativos:
+                    del processos_ativos[session_id]
+            
+            # Enviar resultado
+            if processo.returncode == 0:
+                yield f"data: {json.dumps({'tipo': 'sucesso', 'mensagem': 'Comando executado com sucesso!'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'tipo': 'erro', 'codigo': processo.returncode, 'mensagem': 'Comando retornou código de erro'})}\n\n"
+                
+        except Exception as e:
+            with processos_lock:
+                if session_id in processos_ativos:
+                    del processos_ativos[session_id]
+            yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': str(e)})}\n\n"
+    
+    response = Response(gerar(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+
+
+@app.route('/api/internacoes-solicitar/interromper', methods=['POST'])
+@login_required
+def interromper_buscar_pendentes():
+    """Interrompe o processo de busca de pendentes"""
+    try:
+        data = request.json or {}
+        session_id = data.get('session_id', str(threading.current_thread().ident))
+        
+        with processos_lock:
+            if session_id in processos_ativos:
+                processo = processos_ativos[session_id]
+                
+                try:
+                    processo.terminate()
+                    try:
+                        processo.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        processo.kill()
+                        processo.wait()
+                    
+                    del processos_ativos[session_id]
+                    
+                    return jsonify({
+                        'success': True,
+                        'mensagem': 'Processo interrompido com sucesso'
+                    })
+                except ProcessLookupError:
+                    if session_id in processos_ativos:
+                        del processos_ativos[session_id]
+                    return jsonify({
+                        'success': True,
+                        'mensagem': 'Processo já havia terminado'
+                    })
+            else:
+                return jsonify({
+                    'success': False,
+                    'mensagem': 'Nenhum processo em execução encontrado'
+                }), 404
+                
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 if __name__ == '__main__':

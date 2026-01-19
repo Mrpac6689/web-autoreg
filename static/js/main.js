@@ -4,6 +4,12 @@
  */
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Mover botão flutuante para o body para garantir que fique acima de tudo
+    const btnVisualizarRobo = document.getElementById('btn-visualizar-robo');
+    if (btnVisualizarRobo && btnVisualizarRobo.parentElement !== document.body) {
+        document.body.appendChild(btnVisualizarRobo);
+    }
+    
     // Atualizar data e hora
     updateDateTime();
     setInterval(updateDateTime, 1000);
@@ -138,6 +144,9 @@ function setupFloatingMenu() {
             if (action === 'add-ras') {
                 const btn = document.getElementById('btn-add-ras');
                 if (btn) btn.click();
+            } else if (action === 'prepara-sol-internacoes') {
+                const btn = document.getElementById('btn-prepara-sol-internacoes');
+                if (btn) btn.click();
             } else {
                 // Encontrar botão correspondente pela posição
                 const buttons = document.querySelectorAll('.glass-button');
@@ -199,100 +208,33 @@ function setupVisualizarRobo() {
     const modalVisualizarRobo = document.getElementById('modal-visualizar-robo');
     const iframeRobo = document.getElementById('iframe-robo');
     const closeModalBtn = document.getElementById('close-modal-visualizar-robo');
-    
-    // Controles do navegador
-    const browserBackBtn = document.getElementById('browser-back');
-    const browserForwardBtn = document.getElementById('browser-forward');
     const browserReloadBtn = document.getElementById('browser-reload');
-    const browserUrlInput = document.getElementById('browser-url-input');
-    const browserGoBtn = document.getElementById('browser-go');
-    const browserQuickRobotBtn = document.getElementById('browser-quick-robot');
     
     // URL do serviço do robô - apontar diretamente para o Kasm conforme documentação
     const targetUrl = 'https://cms.michelpaes.com.br';
     
-    // Histórico de navegação
-    let history = [];
-    let historyIndex = -1;
-    
-    // Função para navegar para uma URL
-    function navigateToUrl(url) {
-        if (!url) return;
-        
-        // Se não começa com http:// ou https://, assumir que é relativa
-        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
-            url = '/' + url;
-        }
-        
-        // Para URLs externas, usar diretamente (sem proxy)
-        // Conforme documentação do Kasm, o iframe deve apontar diretamente para o servidor Kasm
-        
-        // Adicionar ao histórico
-        history = history.slice(0, historyIndex + 1);
-        history.push(url);
-        historyIndex = history.length - 1;
-        
-        // Atualizar iframe
-        iframeRobo.src = url;
-        browserUrlInput.value = url;
-        
-        // Atualizar botões de navegação
-        updateNavigationButtons();
-    }
-    
-    // Função para atualizar botões de navegação
-    function updateNavigationButtons() {
-        if (browserBackBtn) {
-            browserBackBtn.disabled = historyIndex <= 0;
-        }
-        if (browserForwardBtn) {
-            browserForwardBtn.disabled = historyIndex >= history.length - 1;
-        }
-    }
-    
-    // Atualizar URL quando o iframe navegar
+    // Pré-carregar iframe em segundo plano quando a página carregar
     if (iframeRobo) {
-        iframeRobo.addEventListener('load', function() {
-            try {
-                // Tentar obter a URL atual do iframe (pode falhar por CORS)
-                const iframeUrl = iframeRobo.contentWindow.location.href;
-                if (browserUrlInput && iframeUrl) {
-                    browserUrlInput.value = iframeUrl;
+        // Carregar o iframe imediatamente, mas mantê-lo oculto até o modal abrir
+        iframeRobo.src = targetUrl;
+        
+        // Quando o modal abrir, garantir que o iframe esteja visível
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    if (modalVisualizarRobo.classList.contains('active')) {
+                        // Modal aberto - garantir que iframe está carregado e visível
+                        if (!iframeRobo.src || iframeRobo.src === '') {
+                            iframeRobo.src = targetUrl;
+                        }
+                    }
                 }
-            } catch (e) {
-                // CORS bloqueia acesso à URL do iframe, manter URL atual
-            }
-            updateNavigationButtons();
+            });
         });
-    }
-    
-    // Botão voltar
-    if (browserBackBtn) {
-        browserBackBtn.addEventListener('click', function() {
-            if (historyIndex > 0) {
-                historyIndex--;
-                const url = history[historyIndex];
-                iframeRobo.src = url;
-                if (browserUrlInput) {
-                    browserUrlInput.value = url;
-                }
-                updateNavigationButtons();
-            }
-        });
-    }
-    
-    // Botão avançar
-    if (browserForwardBtn) {
-        browserForwardBtn.addEventListener('click', function() {
-            if (historyIndex < history.length - 1) {
-                historyIndex++;
-                const url = history[historyIndex];
-                iframeRobo.src = url;
-                if (browserUrlInput) {
-                    browserUrlInput.value = url;
-                }
-                updateNavigationButtons();
-            }
+        
+        observer.observe(modalVisualizarRobo, {
+            attributes: true,
+            attributeFilter: ['class']
         });
     }
     
@@ -305,38 +247,19 @@ function setupVisualizarRobo() {
         });
     }
     
-    // Botão ir (navegar para URL)
-    if (browserGoBtn) {
-        browserGoBtn.addEventListener('click', function() {
-            if (browserUrlInput) {
-                navigateToUrl(browserUrlInput.value);
-            }
-        });
-    }
-    
-    // Navegar ao pressionar Enter no campo de URL
-    if (browserUrlInput) {
-        browserUrlInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                navigateToUrl(browserUrlInput.value);
-            }
-        });
-    }
-    
-    // Botão rápido para acessar o robô
-    if (browserQuickRobotBtn) {
-        browserQuickRobotBtn.addEventListener('click', function() {
-            navigateToUrl(targetUrl);
-        });
-    }
-    
     // Abrir modal ao clicar no botão flutuante
     if (btnVisualizarRobo && modalVisualizarRobo && iframeRobo) {
+        // Usar capture phase para garantir que o evento seja capturado antes dos modais
         btnVisualizarRobo.addEventListener('click', function(e) {
             e.stopPropagation();
-            // Carregar iframe apenas quando abrir o modal
-            navigateToUrl(targetUrl);
+            e.stopImmediatePropagation();
             openModal('modal-visualizar-robo');
+        }, true); // true = capture phase
+        
+        // Também adicionar no bubble phase como fallback
+        btnVisualizarRobo.addEventListener('click', function(e) {
+            e.stopPropagation();
+            e.stopImmediatePropagation();
         });
     }
     
@@ -344,13 +267,6 @@ function setupVisualizarRobo() {
     if (closeModalBtn && modalVisualizarRobo && iframeRobo) {
         closeModalBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            // Limpar iframe ao fechar para parar o carregamento
-            iframeRobo.src = '';
-            history = [];
-            historyIndex = -1;
-            if (browserUrlInput) {
-                browserUrlInput.value = '';
-            }
             closeModal('modal-visualizar-robo');
         });
     }
@@ -359,13 +275,6 @@ function setupVisualizarRobo() {
     if (modalVisualizarRobo && iframeRobo) {
         modalVisualizarRobo.addEventListener('click', function(e) {
             if (e.target === modalVisualizarRobo) {
-                // Limpar iframe ao fechar
-                iframeRobo.src = '';
-                history = [];
-                historyIndex = -1;
-                if (browserUrlInput) {
-                    browserUrlInput.value = '';
-                }
                 closeModal('modal-visualizar-robo');
             }
         });
@@ -374,17 +283,7 @@ function setupVisualizarRobo() {
     // Fechar modal com tecla ESC
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && modalVisualizarRobo && modalVisualizarRobo.classList.contains('active') && iframeRobo) {
-            // Limpar iframe ao fechar
-            iframeRobo.src = '';
-            history = [];
-            historyIndex = -1;
-            if (browserUrlInput) {
-                browserUrlInput.value = '';
-            }
             closeModal('modal-visualizar-robo');
         }
     });
-    
-    // Inicializar botões de navegação
-    updateNavigationButtons();
 }

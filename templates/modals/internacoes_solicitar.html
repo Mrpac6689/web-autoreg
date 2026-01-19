@@ -1,0 +1,64 @@
+<!-- Modal para Planilha de Internações a Solicitar -->
+<div class="glass-modal" id="modal-internacoes-solicitar">
+    <div class="glass-modal-content modal-extra-large">
+        <div class="modal-header">
+            <h2>Planilha de Internações a Solicitar</h2>
+            <button class="glass-modal-close" id="close-modal-internacoes">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="spreadsheet-container">
+                <table class="editable-spreadsheet" id="spreadsheet-internacoes">
+                    <thead id="spreadsheet-header-internacoes">
+                        <!-- Cabeçalho será preenchido dinamicamente -->
+                    </thead>
+                    <tbody id="spreadsheet-body-internacoes">
+                        <!-- Dados serão preenchidos dinamicamente -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="spreadsheet-info">
+                <i class="fas fa-info-circle"></i>
+                <p>Preencha a planilha com as informações de internações a serem solicitadas. Caso existam informações anteriores, pressione "Limpar". Use o botão "Buscar pendentes" para executar o comando -aihs do autoreg.</p>
+            </div>
+            <!-- Terminal para mostrar execução do comando -sia -->
+            <div class="terminal-container" id="terminal-container-internacoes" style="display: none; margin-top: 20px;">
+                <div class="terminal-header">
+                    <i class="fas fa-terminal"></i>
+                    <span>Saída do Terminal</span>
+                </div>
+                <div class="terminal-output" id="terminal-output-internacoes">
+                    <div class="terminal-line">Aguardando início da execução...</div>
+                </div>
+            </div>
+            <div class="eta-container" id="eta-container-internacoes" style="display: none; margin-top: 10px;">
+                <div class="eta-label">
+                    <i class="fas fa-clock"></i>
+                    <span id="eta-label-internacoes">Aguardando...</span>
+                </div>
+                <div class="eta-progress-bar">
+                    <div class="eta-progress-fill" id="eta-progress-fill-internacoes"></div>
+                </div>
+                <div class="eta-status" id="eta-status-internacoes">Pronto para iniciar</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="glass-button-action" id="btn-limpar-internacoes">
+                <i class="fas fa-trash-alt"></i> Limpar
+            </button>
+            <button type="button" class="glass-button-action" id="btn-buscar-pendentes">
+                <i class="fas fa-search"></i> Buscar pendentes
+            </button>
+            <button type="button" class="glass-button-action glass-button-danger" id="btn-interromper-busca" style="display: none;">
+                <i class="fas fa-stop"></i> Interromper
+            </button>
+            <button type="button" class="glass-button-action" id="btn-salvar-internacoes">
+                <i class="fas fa-save"></i> Salvar
+            </button>
+            <button type="button" class="glass-button-action" id="btn-fechar-internacoes">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>
