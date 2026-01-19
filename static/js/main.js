@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Configurar logout
     setupLogout();
+    
+    // Configurar botão de visualizar robô
+    setupVisualizarRobo();
 });
 
 /**
@@ -186,4 +189,202 @@ function setupLogout() {
             }
         });
     }
+}
+
+/**
+ * Configura o botão flutuante e modal para visualizar robô (navegador)
+ */
+function setupVisualizarRobo() {
+    const btnVisualizarRobo = document.getElementById('btn-visualizar-robo');
+    const modalVisualizarRobo = document.getElementById('modal-visualizar-robo');
+    const iframeRobo = document.getElementById('iframe-robo');
+    const closeModalBtn = document.getElementById('close-modal-visualizar-robo');
+    
+    // Controles do navegador
+    const browserBackBtn = document.getElementById('browser-back');
+    const browserForwardBtn = document.getElementById('browser-forward');
+    const browserReloadBtn = document.getElementById('browser-reload');
+    const browserUrlInput = document.getElementById('browser-url-input');
+    const browserGoBtn = document.getElementById('browser-go');
+    const browserQuickRobotBtn = document.getElementById('browser-quick-robot');
+    
+    // URL do serviço do robô - apontar diretamente para o Kasm conforme documentação
+    const targetUrl = 'https://cms.michelpaes.com.br';
+    
+    // Histórico de navegação
+    let history = [];
+    let historyIndex = -1;
+    
+    // Função para navegar para uma URL
+    function navigateToUrl(url) {
+        if (!url) return;
+        
+        // Se não começa com http:// ou https://, assumir que é relativa
+        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
+            url = '/' + url;
+        }
+        
+        // Para URLs externas, usar diretamente (sem proxy)
+        // Conforme documentação do Kasm, o iframe deve apontar diretamente para o servidor Kasm
+        
+        // Adicionar ao histórico
+        history = history.slice(0, historyIndex + 1);
+        history.push(url);
+        historyIndex = history.length - 1;
+        
+        // Atualizar iframe
+        iframeRobo.src = url;
+        browserUrlInput.value = url;
+        
+        // Atualizar botões de navegação
+        updateNavigationButtons();
+    }
+    
+    // Função para atualizar botões de navegação
+    function updateNavigationButtons() {
+        if (browserBackBtn) {
+            browserBackBtn.disabled = historyIndex <= 0;
+        }
+        if (browserForwardBtn) {
+            browserForwardBtn.disabled = historyIndex >= history.length - 1;
+        }
+    }
+    
+    // Atualizar URL quando o iframe navegar
+    if (iframeRobo) {
+        iframeRobo.addEventListener('load', function() {
+            try {
+                // Tentar obter a URL atual do iframe (pode falhar por CORS)
+                const iframeUrl = iframeRobo.contentWindow.location.href;
+                if (browserUrlInput && iframeUrl) {
+                    browserUrlInput.value = iframeUrl;
+                }
+            } catch (e) {
+                // CORS bloqueia acesso à URL do iframe, manter URL atual
+            }
+            updateNavigationButtons();
+        });
+    }
+    
+    // Botão voltar
+    if (browserBackBtn) {
+        browserBackBtn.addEventListener('click', function() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                const url = history[historyIndex];
+                iframeRobo.src = url;
+                if (browserUrlInput) {
+                    browserUrlInput.value = url;
+                }
+                updateNavigationButtons();
+            }
+        });
+    }
+    
+    // Botão avançar
+    if (browserForwardBtn) {
+        browserForwardBtn.addEventListener('click', function() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                const url = history[historyIndex];
+                iframeRobo.src = url;
+                if (browserUrlInput) {
+                    browserUrlInput.value = url;
+                }
+                updateNavigationButtons();
+            }
+        });
+    }
+    
+    // Botão recarregar
+    if (browserReloadBtn) {
+        browserReloadBtn.addEventListener('click', function() {
+            if (iframeRobo && iframeRobo.src) {
+                iframeRobo.src = iframeRobo.src;
+            }
+        });
+    }
+    
+    // Botão ir (navegar para URL)
+    if (browserGoBtn) {
+        browserGoBtn.addEventListener('click', function() {
+            if (browserUrlInput) {
+                navigateToUrl(browserUrlInput.value);
+            }
+        });
+    }
+    
+    // Navegar ao pressionar Enter no campo de URL
+    if (browserUrlInput) {
+        browserUrlInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                navigateToUrl(browserUrlInput.value);
+            }
+        });
+    }
+    
+    // Botão rápido para acessar o robô
+    if (browserQuickRobotBtn) {
+        browserQuickRobotBtn.addEventListener('click', function() {
+            navigateToUrl(targetUrl);
+        });
+    }
+    
+    // Abrir modal ao clicar no botão flutuante
+    if (btnVisualizarRobo && modalVisualizarRobo && iframeRobo) {
+        btnVisualizarRobo.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Carregar iframe apenas quando abrir o modal
+            navigateToUrl(targetUrl);
+            openModal('modal-visualizar-robo');
+        });
+    }
+    
+    // Fechar modal ao clicar no botão de fechar
+    if (closeModalBtn && modalVisualizarRobo && iframeRobo) {
+        closeModalBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Limpar iframe ao fechar para parar o carregamento
+            iframeRobo.src = '';
+            history = [];
+            historyIndex = -1;
+            if (browserUrlInput) {
+                browserUrlInput.value = '';
+            }
+            closeModal('modal-visualizar-robo');
+        });
+    }
+    
+    // Fechar modal ao clicar fora dele
+    if (modalVisualizarRobo && iframeRobo) {
+        modalVisualizarRobo.addEventListener('click', function(e) {
+            if (e.target === modalVisualizarRobo) {
+                // Limpar iframe ao fechar
+                iframeRobo.src = '';
+                history = [];
+                historyIndex = -1;
+                if (browserUrlInput) {
+                    browserUrlInput.value = '';
+                }
+                closeModal('modal-visualizar-robo');
+            }
+        });
+    }
+    
+    // Fechar modal com tecla ESC
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modalVisualizarRobo && modalVisualizarRobo.classList.contains('active') && iframeRobo) {
+            // Limpar iframe ao fechar
+            iframeRobo.src = '';
+            history = [];
+            historyIndex = -1;
+            if (browserUrlInput) {
+                browserUrlInput.value = '';
+            }
+            closeModal('modal-visualizar-robo');
+        }
+    });
+    
+    // Inicializar botões de navegação
+    updateNavigationButtons();
 }

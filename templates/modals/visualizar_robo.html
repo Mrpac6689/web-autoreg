@@ -1,0 +1,53 @@
+<!-- Modal para Visualizar Robô -->
+<div class="glass-modal" id="modal-visualizar-robo">
+    <div class="glass-modal-content modal-large modal-iframe">
+        <div class="modal-header">
+            <h2>Visualizar Robô</h2>
+            <button class="glass-modal-close" id="close-modal-visualizar-robo">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <!-- Barra de navegação do navegador -->
+            <div class="browser-navbar" id="browser-navbar">
+                <div class="browser-nav-controls">
+                    <button class="browser-nav-btn" id="browser-back" title="Voltar">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <button class="browser-nav-btn" id="browser-forward" title="Avançar">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                    <button class="browser-nav-btn" id="browser-reload" title="Recarregar">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                </div>
+                <div class="browser-url-bar">
+                    <input 
+                        type="text" 
+                        id="browser-url-input" 
+                        class="browser-url-input" 
+                        placeholder="Digite uma URL ou use o botão para acessar o robô"
+                        value="https://cms.michelpaes.com.br">
+                    <button class="browser-go-btn" id="browser-go" title="Ir">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+                <div class="browser-quick-actions">
+                    <button class="browser-quick-btn" id="browser-quick-robot" title="Acessar Robô">
+                        <i class="fas fa-robot"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="iframe-container">
+                <iframe 
+                    id="iframe-robo" 
+                    src="" 
+                    frameborder="0"
+                    allowfullscreen
+                    allow="autoplay; microphone; camera; clipboard-read; clipboard-write; window-management; self; https://cms.michelpaes.com.br"
+                    class="robo-iframe">
+                </iframe>
+            </div>
+        </div>
+    </div>
+</div>

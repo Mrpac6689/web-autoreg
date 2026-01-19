@@ -169,12 +169,18 @@
             <a href="https://www.michelpaes.adv.br" target="_blank">www.michelpaes.adv.br</a> - 
             Todos os direitos reservados
         </footer>
+
+        <!-- Botão Flutuante para Visualizar Robô -->
+        <button class="floating-action-button" id="btn-visualizar-robo" aria-label="Visualizar Robô" title="Visualizar Robô">
+            <i class="fas fa-eye"></i>
+        </button>
     </div>
 
     <!-- Modais -->
     {% include 'modals/exames_solicitar.html' %}
     {% include 'modals/solicitar_tomografias.html' %}
     {% include 'modals/imprimir_tomografias.html' %}
+    {% include 'modals/visualizar_robo.html' %}
 
     <!-- Bootstrap JS local -->
     <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
