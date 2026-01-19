@@ -1857,22 +1857,16 @@ def api_registrar_relatorio():
 @login_required
 def load_internacoes_csv():
     """Carrega o conteúdo do arquivo CSV de internações para solicitar"""
-    csv_path = Path(WORKDIR) / 'solicita_inf_aih.csv'
-    
-    # Cabeçalho padrão do CSV (ajustar conforme necessário)
-    CABECALHO_PADRAO = ['ra', 'data', 'hora', 'cns', 'procedimento', 'chave']
+    csv_path = Path(WORKDIR) / 'internados_ghosp_avancado.csv'
     
     try:
         # Garantir que o diretório existe
         csv_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Se o arquivo não existir, criar com cabeçalho padrão
-        arquivo_criado = False
+        # Se o arquivo não existir, criar arquivo vazio
         if not csv_path.exists():
             with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(CABECALHO_PADRAO)
-            arquivo_criado = True
+                pass  # Arquivo vazio
         
         # Ler o CSV
         data = []
@@ -1881,29 +1875,13 @@ def load_internacoes_csv():
             for row in reader:
                 data.append(row)
         
-        # Se o arquivo estava vazio ou só tinha cabeçalho, garantir que tem pelo menos o cabeçalho
+        # Se o arquivo estava vazio, retornar array vazio (frontend tratará)
         if not data or len(data) == 0:
-            data = [CABECALHO_PADRAO]
-            # Salvar o cabeçalho
-            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(CABECALHO_PADRAO)
-            arquivo_criado = True
-        
-        # Verificar se a primeira linha é o cabeçalho válido
-        if len(data) > 0:
-            # Se a primeira linha estiver vazia ou não tiver o número correto de colunas, substituir pelo cabeçalho
-            if len(data[0]) == 0 or len(data[0]) != len(CABECALHO_PADRAO):
-                data[0] = CABECALHO_PADRAO
-                with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-                    writer = csv.writer(f)
-                    writer.writerows(data)
-                arquivo_criado = True
+            data = []
         
         return jsonify({
-            'success': True, 
-            'data': data,
-            'arquivo_criado': arquivo_criado
+            'success': True,
+            'data': data
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1915,23 +1893,13 @@ def save_internacoes_csv():
     """Salva o conteúdo editado no arquivo CSV"""
     try:
         data = request.json.get('data', [])
-        csv_path = Path(WORKDIR) / 'solicita_inf_aih.csv'
-        
-        # Cabeçalho padrão que DEVE ser preservado
-        CABECALHO_PADRAO = ['ra', 'data', 'hora', 'cns', 'procedimento', 'chave']
+        csv_path = Path(WORKDIR) / 'internados_ghosp_avancado.csv'
         
         # Garantir que o diretório existe
         csv_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Garantir que a primeira linha sempre seja o cabeçalho correto
-        if len(data) > 0:
-            # Forçar cabeçalho na primeira posição
-            data[0] = CABECALHO_PADRAO
-        else:
-            # Se não houver dados, criar apenas com cabeçalho
-            data = [CABECALHO_PADRAO]
-        
-        # Salvar o CSV
+        # Salvar o CSV exatamente como recebido (sem forçar cabeçalho padrão)
+        # A primeira linha do data será salva como está (cabeçalho do CSV)
         with open(csv_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerows(data)

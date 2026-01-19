@@ -78,6 +78,7 @@ function initInternacoesModal() {
     const modal = document.getElementById('modal-internacoes-solicitar');
     const btnClose = document.getElementById('close-modal-internacoes');
     const btnLimpar = document.getElementById('btn-limpar-internacoes');
+    const btnAtualizarVisualizacao = document.getElementById('btn-atualizar-visualizacao');
     const btnSalvar = document.getElementById('btn-salvar-internacoes');
     const btnSair = document.getElementById('btn-fechar-internacoes');
     const btnBuscarPendentes = document.getElementById('btn-buscar-pendentes');
@@ -98,6 +99,21 @@ function initInternacoesModal() {
     if (btnLimpar) {
         btnLimpar.addEventListener('click', function() {
             limparPlanilhaInternacoes();
+        });
+    }
+    
+    if (btnAtualizarVisualizacao) {
+        btnAtualizarVisualizacao.addEventListener('click', function() {
+            // Verificar se há alterações não salvas
+            if (isInternacoesEdited) {
+                confirmSimNao('Há alterações não salvas. Deseja descartá-las e recarregar o arquivo?').then((resposta) => {
+                    if (resposta) {
+                        loadInternacoesData();
+                    }
+                });
+            } else {
+                loadInternacoesData();
+            }
         });
     }
     
@@ -261,24 +277,17 @@ function renderInternacoesSpreadsheet() {
     header.innerHTML = '';
     body.innerHTML = '';
     
-    // Cabeçalho padrão do CSV
-    const CABECALHO_PADRAO = ['ra', 'data', 'hora', 'cns', 'procedimento', 'chave'];
-    
-    // Garantir que sempre há pelo menos o cabeçalho
+    // Garantir que sempre há pelo menos uma linha (cabeçalho)
     if (internacoesData.length === 0) {
-        internacoesData = [CABECALHO_PADRAO];
+        internacoesData = [['']]; // Cabeçalho vazio se não houver dados
     }
     
-    // Garantir que a primeira linha é SEMPRE o cabeçalho válido
-    if (internacoesData.length > 0) {
-        internacoesData[0] = [...CABECALHO_PADRAO];
-    } else {
-        internacoesData[0] = [...CABECALHO_PADRAO];
-    }
+    // Usar a primeira linha do CSV como cabeçalho (sem forçar valores padrão)
+    const headerData = internacoesData[0] || [];
     
-    // Renderizar cabeçalho
+    // Renderizar cabeçalho usando a primeira linha do CSV
     const headerRow = document.createElement('tr');
-    internacoesData[0].forEach((cell) => {
+    headerData.forEach((cell) => {
         const th = document.createElement('th');
         th.textContent = cell || '';
         th.contentEditable = false;
@@ -288,13 +297,17 @@ function renderInternacoesSpreadsheet() {
     header.appendChild(headerRow);
     
     // Renderizar corpo
+    // Determinar número de colunas baseado no cabeçalho
+    const numCols = headerData.length;
+    
     for (let i = 1; i < internacoesData.length; i++) {
         const row = document.createElement('tr');
         const rowData = internacoesData[i] || [];
         
-        for (let j = 0; j < internacoesData[0].length; j++) {
+        // Garantir que a linha tenha o mesmo número de colunas do cabeçalho
+        for (let j = 0; j < numCols; j++) {
             const td = document.createElement('td');
-            td.textContent = rowData[j] || '';
+            td.textContent = (rowData[j] !== undefined && rowData[j] !== null) ? String(rowData[j]) : '';
             td.contentEditable = true;
             td.dataset.row = i;
             td.dataset.col = j;
@@ -418,10 +431,9 @@ function updateInternacoesCellData(cell) {
     
     // NUNCA permitir editar a primeira linha (cabeçalho)
     if (row === 0) {
-        const CABECALHO_PADRAO = ['ra', 'data', 'hora', 'cns', 'procedimento', 'chave'];
-        if (internacoesData[0] && internacoesData[0][col] !== CABECALHO_PADRAO[col]) {
-            internacoesData[0][col] = CABECALHO_PADRAO[col];
-            cell.textContent = CABECALHO_PADRAO[col];
+        // Manter o valor atual do cabeçalho (não forçar valores padrão)
+        if (internacoesData[0] && internacoesData[0][col] !== undefined) {
+            cell.textContent = internacoesData[0][col] || '';
         }
         return;
     }
@@ -916,20 +928,28 @@ async function limparPlanilhaInternacoes() {
  */
 function salvarPlanilhaInternacoes() {
     return new Promise((resolve, reject) => {
-        const CABECALHO_PADRAO = ['ra', 'data', 'hora', 'cns', 'procedimento', 'chave'];
         const dataToSave = [];
         
-        dataToSave.push([...CABECALHO_PADRAO]);
+        // Usar a primeira linha do CSV como cabeçalho (sem forçar valores padrão)
+        if (internacoesData.length > 0 && internacoesData[0]) {
+            dataToSave.push([...internacoesData[0]]);
+        } else {
+            // Se não houver cabeçalho, criar um vazio
+            dataToSave.push(['']);
+        }
+        
+        // Determinar o número de colunas baseado no cabeçalho
+        const numCols = dataToSave[0].length;
         
         for (let i = 1; i < internacoesData.length; i++) {
             const row = internacoesData[i];
             
             if (!row || !Array.isArray(row)) {
-                const emptyRow = new Array(CABECALHO_PADRAO.length).fill('');
+                const emptyRow = new Array(numCols).fill('');
                 dataToSave.push(emptyRow);
             } else {
                 const rowData = [];
-                for (let j = 0; j < CABECALHO_PADRAO.length; j++) {
+                for (let j = 0; j < numCols; j++) {
                     rowData.push(row[j] !== undefined ? String(row[j]) : '');
                 }
                 dataToSave.push(rowData);
