@@ -1,0 +1,92 @@
+<!-- Modal para Solicitar Internações -->
+<div class="glass-modal" id="modal-solicitar-internacoes">
+    <div class="glass-modal-content modal-large">
+        <div class="modal-header">
+            <h2>Solicitar Internações</h2>
+            <button class="glass-modal-close" id="close-modal-solicitar-internacoes">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <!-- Terminal para mostrar execução dos comandos -->
+            <div class="terminal-container" id="terminal-container-solicitar-internacoes">
+                <div class="terminal-header">
+                    <i class="fas fa-terminal"></i>
+                    <span>Histórico de Execução</span>
+                </div>
+                <div class="terminal-output" id="terminal-output-solicitar-internacoes">
+                    <div class="terminal-line">Aguardando início da execução...</div>
+                </div>
+            </div>
+            <div class="eta-container" id="eta-container-solicitar-internacoes" style="display: none; margin-top: 10px;">
+                <div class="eta-label">
+                    <i class="fas fa-clock"></i>
+                    <span id="eta-label-solicitar-internacoes">Aguardando...</span>
+                </div>
+                <div class="eta-progress-bar">
+                    <div class="eta-progress-fill" id="eta-progress-fill-solicitar-internacoes"></div>
+                </div>
+                <div class="eta-status" id="eta-status-solicitar-internacoes">Pronto para iniciar</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="glass-button-action" id="btn-exibir-pendencias-internacoes">
+                <i class="fas fa-list"></i> Exibir pendências
+            </button>
+            <button type="button" class="glass-button-action" id="btn-processar-pendencias-internacoes">
+                <i class="fas fa-cog"></i> Processar pendências
+            </button>
+            <button type="button" class="glass-button-action" id="btn-iniciar-processo-internacoes">
+                <i class="fas fa-play"></i> Iniciar processo
+            </button>
+            <button type="button" class="glass-button-action glass-button-danger" id="btn-interromper-processo-internacoes" style="display: none;">
+                <i class="fas fa-stop"></i> Interromper
+            </button>
+            <button type="button" class="glass-button-action" id="btn-fechar-solicitar-internacoes">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal do Robô durante execução do -spa -->
+<div class="glass-modal" id="modal-robo-spa">
+    <div class="glass-modal-content modal-large modal-iframe">
+        <div class="modal-header">
+            <h2>Interação Manual - Comando -spa</h2>
+            <div class="modal-header-actions">
+                <button class="glass-modal-minimize" id="minimize-modal-robo-spa" title="Minimizar">
+                    <i class="fas fa-window-minimize"></i>
+                </button>
+                <button class="glass-modal-maximize" id="maximize-modal-robo-spa" title="Maximizar" style="display: none;">
+                    <i class="fas fa-window-maximize"></i>
+                </button>
+                <button class="glass-modal-close" id="close-modal-robo-spa" style="display: none;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div class="iframe-container">
+                <iframe 
+                    id="iframe-robo-spa" 
+                    src="about:blank"
+                    loading="lazy"
+                    frameborder="0"
+                    allowfullscreen
+                    allow="autoplay; microphone; camera; clipboard-read; clipboard-write; window-management; self; https://cms.michelpaes.com.br"
+                    class="robo-iframe">
+                </iframe>
+            </div>
+            <!-- Botões flutuantes redondos -->
+            <div class="floating-buttons-container">
+                <button class="floating-action-button-round" id="btn-salvar-spa" title="Salvar URL atual e avançar (s)">
+                    <i class="fas fa-save"></i>
+                </button>
+                <button class="floating-action-button-round" id="btn-pular-spa" title="Pular linha e avançar (p)">
+                    <i class="fas fa-forward"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

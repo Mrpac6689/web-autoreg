@@ -147,6 +147,9 @@ function setupFloatingMenu() {
             } else if (action === 'prepara-sol-internacoes') {
                 const btn = document.getElementById('btn-prepara-sol-internacoes');
                 if (btn) btn.click();
+            } else if (action === 'solicitar-internacoes') {
+                const btn = document.getElementById('btn-solicitar-internacoes');
+                if (btn) btn.click();
             } else {
                 // Encontrar botão correspondente pela posição
                 const buttons = document.querySelectorAll('.glass-button');

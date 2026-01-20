@@ -12,6 +12,8 @@ import json
 import re
 import subprocess
 import threading
+import time
+import select
 from pathlib import Path
 import requests
 from urllib3.exceptions import InsecureRequestWarning
@@ -62,7 +64,12 @@ app.config['USE_DOCKER'] = USE_DOCKER
 
 # Armazenar processos em execução (usando thread-safe dict)
 processos_ativos = {}
+# Armazenar stdin dos processos para permitir interação
+processos_stdin = {}
+# Armazenar queues para comunicação entre threads de leitura de stdout
+processos_queues = {}
 import threading
+import queue
 processos_lock = threading.Lock()
 
 
@@ -1887,6 +1894,69 @@ def load_internacoes_csv():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/pendencias-internacoes/load', methods=['GET'])
+@login_required
+def load_pendencias_csv():
+    """Carrega o conteúdo do arquivo CSV de pendências de internações"""
+    csv_path = Path(WORKDIR) / 'solicita_inf_aih.csv'
+    
+    try:
+        # Garantir que o diretório existe
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Se o arquivo não existir, criar arquivo vazio
+        if not csv_path.exists():
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                pass  # Arquivo vazio
+        
+        # Ler o CSV
+        data = []
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                data.append(row)
+        
+        # Se o arquivo estava vazio, retornar array vazio (frontend tratará)
+        if not data or len(data) == 0:
+            data = []
+        
+        return jsonify({
+            'success': True,
+            'data': data
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pendencias-internacoes/save', methods=['POST'])
+@login_required
+def save_pendencias_csv():
+    """Salva o conteúdo editado no arquivo CSV de pendências"""
+    try:
+        data = request.json.get('data', [])
+        csv_path = Path(WORKDIR) / 'solicita_inf_aih.csv'
+        
+        # Garantir que o diretório existe
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Salvar o CSV exatamente como recebido (sem forçar cabeçalho padrão)
+        # A primeira linha do data será salva como está (cabeçalho do CSV)
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            for row in data:
+                writer.writerow(row)
+        
+        return jsonify({
+            'success': True,
+            'message': 'CSV salvo com sucesso'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/internacoes-solicitar/save', methods=['POST'])
 @login_required
 def save_internacoes_csv():
@@ -2026,6 +2096,8 @@ def interromper_buscar_pendentes():
                         processo.wait()
                     
                     del processos_ativos[session_id]
+                    if session_id in processos_stdin:
+                        del processos_stdin[session_id]
                     
                     return jsonify({
                         'success': True,
@@ -2034,6 +2106,431 @@ def interromper_buscar_pendentes():
                 except ProcessLookupError:
                     if session_id in processos_ativos:
                         del processos_ativos[session_id]
+                    if session_id in processos_stdin:
+                        del processos_stdin[session_id]
+                    return jsonify({
+                        'success': True,
+                        'mensagem': 'Processo já havia terminado'
+                    })
+            else:
+                return jsonify({
+                    'success': False,
+                    'mensagem': 'Nenhum processo em execução encontrado'
+                }), 404
+                
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/internacoes-solicitar/executar', methods=['POST'])
+@login_required
+def executar_solicitar_internacoes():
+    """Executa os comandos sequenciais para solicitar internações: -spa -sia -ssr -snt"""
+    data = request.json or {}
+    comando_index = data.get('comando_index', 0)
+    session_id = data.get('session_id', str(threading.current_thread().ident))
+    
+    def gerar():
+        nonlocal session_id
+        try:
+            # Comandos a serem executados sequencialmente
+            comandos = [
+                ['-spa'],  # Primeiro comando - requer interação manual
+                ['-sia'],  # Segundo comando
+                ['-ssr'],  # Terceiro comando
+                ['-snt']   # Quarto comando
+            ]
+            
+            if comando_index >= len(comandos):
+                yield f"data: {json.dumps({'tipo': 'completo', 'mensagem': 'Todos os comandos foram executados com sucesso!'})}\n\n"
+                return
+            
+            # Construir comando completo
+            if 'python' in PYTHONPATH.lower():
+                comando_original = [PYTHONPATH, '-u', AUTOREGPATH] + comandos[comando_index]
+            else:
+                comando_original = [PYTHONPATH, AUTOREGPATH] + comandos[comando_index]
+            
+            # Verificar container antes de executar
+            if USE_DOCKER and DOCKER_CONTAINER:
+                container_ok, mensagem = verificar_container_docker()
+                if not container_ok:
+                    yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': f'Container Docker não acessível: {mensagem}'})}\n\n"
+                    return
+            
+            # Construir comando com Docker se necessário
+            comando = construir_comando_docker(comando_original)
+            
+            # Se for o primeiro comando (-spa), criar flag de pausa antes de executar
+            if comando_index == 0:
+                try:
+                    pause_flag_path = Path(WORKDIR) / 'pause.flag'
+                    pause_flag_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(pause_flag_path, 'w', encoding='utf-8') as f:
+                        f.write('pausar')
+                    yield f"data: {json.dumps({'tipo': 'output', 'linha': 'Flag pause.flag criada - processo será pausado para interação'})}\n\n"
+                except Exception as e:
+                    yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': f'Erro ao criar flag de pausa: {str(e)}'})}\n\n"
+                    return
+            
+            # Enviar início do comando
+            yield f"data: {json.dumps({'tipo': 'inicio', 'comando_index': comando_index, 'total': len(comandos), 'comando': ' '.join(comando)})}\n\n"
+            
+            # Executar comando com streaming
+            env = os.environ.copy()
+            env['PYTHONUNBUFFERED'] = '1'
+            
+            cwd_exec = None if (USE_DOCKER and DOCKER_CONTAINER) else WORKDIR
+            
+            # Para o primeiro comando (-spa), precisamos de stdin para interação
+            # Para os outros comandos, não precisamos
+            precisa_stdin = (comando_index == 0)
+            
+            processo = subprocess.Popen(
+                comando,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE if precisa_stdin else None,
+                text=True,
+                bufsize=0,
+                universal_newlines=True,
+                cwd=cwd_exec,
+                env=env
+            )
+            
+            # Armazenar processo e stdin se necessário
+            with processos_lock:
+                processos_ativos[session_id] = processo
+                if precisa_stdin:
+                    processos_stdin[session_id] = processo.stdin
+            
+            # Ler saída caractere por caractere usando thread para evitar bloqueio
+            output_queue = queue.Queue()
+            leitura_ativa = threading.Event()
+            leitura_ativa.set()
+            
+            def ler_stdout_thread():
+                """Thread para ler stdout sem bloquear o processo principal"""
+                buffer_local = ''
+                try:
+                    while leitura_ativa.is_set():
+                        char = processo.stdout.read(1)
+                        if not char:
+                            if processo.poll() is not None:
+                                if buffer_local.strip():
+                                    output_queue.put(('linha', buffer_local.rstrip()))
+                                output_queue.put(('fim', None))
+                                break
+                            time.sleep(0.1)
+                            continue
+                        
+                        buffer_local += char
+                        if char == '\n':
+                            linha_limpa = buffer_local.rstrip()
+                            if linha_limpa:
+                                output_queue.put(('linha', linha_limpa))
+                            buffer_local = ''
+                except Exception as e:
+                    output_queue.put(('erro', str(e)))
+            
+            # Iniciar thread de leitura
+            thread_leitura = threading.Thread(target=ler_stdout_thread, daemon=True)
+            thread_leitura.start()
+            
+            # Processar saída da queue
+            buffer_linha = ''
+            ultima_linha_aguardando = None
+            
+            while True:
+                try:
+                    # Aguardar item da queue com timeout
+                    try:
+                        tipo_item, dados = output_queue.get(timeout=0.5)
+                    except queue.Empty:
+                        # Timeout - verificar se processo ainda está rodando
+                        if processo.poll() is not None:
+                            if buffer_linha.strip():
+                                yield f"data: {json.dumps({'tipo': 'output', 'linha': buffer_linha.rstrip()})}\n\n"
+                            break
+                        continue
+                    
+                    if tipo_item == 'fim':
+                        break
+                    elif tipo_item == 'erro':
+                        yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': dados})}\n\n"
+                        break
+                    elif tipo_item == 'linha':
+                        linha_limpa = dados
+                        yield f"data: {json.dumps({'tipo': 'output', 'linha': linha_limpa})}\n\n"
+                        
+                        # Detectar quando o processo está aguardando input do usuário
+                        if precisa_stdin:
+                            linha_lower = linha_limpa.lower().strip()
+                            linha_sem_espacos = linha_limpa.strip()
+                            
+                            padrao_detectado = False
+                            
+                            # Padrão 1: "👉 Digite o comando (s/p):"
+                            if '👉' in linha_sem_espacos and 'digite' in linha_lower and ('comando' in linha_lower or 's/p' in linha_lower):
+                                padrao_detectado = True
+                            
+                            # Padrão 2: "Aguardando interação do usuário"
+                            elif 'aguardando interação' in linha_lower and 'usuário' in linha_lower:
+                                padrao_detectado = True
+                            
+                            # Padrão 3: "Digite 's' e pressione Enter" ou "Digite 'p' e pressione Enter"
+                            elif ('digite' in linha_lower and 'pressione enter' in linha_lower) and \
+                                 (("'s'" in linha_lower or "'p'" in linha_lower) or ('s' in linha_lower and 'p' in linha_lower)):
+                                padrao_detectado = True
+                            
+                            if padrao_detectado:
+                                if linha_sem_espacos != ultima_linha_aguardando:
+                                    ultima_linha_aguardando = linha_sem_espacos
+                                    time.sleep(0.3)
+                                    yield f"data: {json.dumps({'tipo': 'aguardando_input', 'mensagem': 'Aguardando interação do usuário', 'linha': linha_limpa})}\n\n"
+                                    
+                                    # Aguardar até que o usuário envie um comando e o processo produza nova saída
+                                    # A thread continua lendo, mas se não houver dados por um tempo,
+                                    # sabemos que está aguardando input
+                                    timeout_aguardando = 0
+                                    sem_dados_count = 0
+                                    while timeout_aguardando < 300:  # Timeout de 5 minutos
+                                        if processo.poll() is not None:
+                                            break
+                                        # Verificar se há nova saída disponível
+                                        try:
+                                            tipo_item, dados = output_queue.get(timeout=1.0)
+                                            sem_dados_count = 0
+                                            if tipo_item == 'linha':
+                                                # Nova saída após enviar comando - processar
+                                                yield f"data: {json.dumps({'tipo': 'output', 'linha': dados})}\n\n"
+                                                # Continuar processamento normal
+                                                break
+                                            elif tipo_item == 'fim':
+                                                break
+                                        except queue.Empty:
+                                            sem_dados_count += 1
+                                            timeout_aguardando += 1.0
+                                            # Se não há dados por 2 segundos após detectar aguardando input,
+                                            # assumimos que está realmente aguardando
+                                            if sem_dados_count >= 2:
+                                                # Continuar aguardando, mas não bloquear
+                                                continue
+                                        
+                except Exception as e:
+                    yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': str(e)})}\n\n"
+                    break
+            
+            # Parar thread de leitura
+            leitura_ativa.clear()
+            thread_leitura.join(timeout=1)
+            
+            # Aguardar término do processo
+            processo.wait()
+            
+            # Se foi o primeiro comando (-spa), remover flag de pausa
+            if comando_index == 0:
+                try:
+                    pause_flag_path = Path(WORKDIR) / 'pause.flag'
+                    if pause_flag_path.exists():
+                        pause_flag_path.unlink()
+                except Exception as e:
+                    # Log erro mas não interromper execução
+                    print(f"Erro ao remover pause.flag: {e}")
+            
+            # Remover processo da lista de ativos
+            with processos_lock:
+                if session_id in processos_ativos:
+                    del processos_ativos[session_id]
+                if session_id in processos_stdin:
+                    del processos_stdin[session_id]
+            
+            # Calcular progresso
+            progresso = int(((comando_index + 1) / len(comandos)) * 100)
+            
+            # Enviar resultado
+            if processo.returncode == 0:
+                yield f"data: {json.dumps({'tipo': 'sucesso', 'comando_index': comando_index, 'progresso': progresso, 'completo': comando_index + 1 >= len(comandos), 'mensagem': f'Comando {comandos[comando_index][0]} executado com sucesso'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'tipo': 'erro', 'codigo': processo.returncode, 'mensagem': f'Comando {comandos[comando_index][0]} retornou código de erro'})}\n\n"
+                
+        except Exception as e:
+            with processos_lock:
+                if session_id in processos_ativos:
+                    del processos_ativos[session_id]
+                if session_id in processos_stdin:
+                    del processos_stdin[session_id]
+            yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': str(e)})}\n\n"
+    
+    response = Response(gerar(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+
+
+@app.route('/api/internacoes-solicitar/criar-flag', methods=['POST'])
+@login_required
+def criar_flag():
+    """Cria uma flag no diretório WORKDIR"""
+    try:
+        data = request.json or {}
+        nome_flag = data.get('flag', '').strip()
+        
+        if not nome_flag:
+            return jsonify({'success': False, 'error': 'Nome da flag é obrigatório'}), 400
+        
+        # Validar nome da flag para evitar path traversal
+        if '..' in nome_flag or '/' in nome_flag or '\\' in nome_flag:
+            return jsonify({'success': False, 'error': 'Nome de flag inválido'}), 400
+        
+        # Criar arquivo flag no WORKDIR
+        flag_path = Path(WORKDIR) / nome_flag
+        
+        # Garantir que o diretório existe
+        flag_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Criar arquivo flag
+        with open(flag_path, 'w', encoding='utf-8') as f:
+            f.write('pausar' if nome_flag == 'pause.flag' else '')
+        
+        return jsonify({
+            'success': True,
+            'mensagem': f'Flag {nome_flag} criada com sucesso'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/internacoes-solicitar/remover-flag', methods=['POST'])
+@login_required
+def remover_flag():
+    """Remove uma flag do diretório WORKDIR"""
+    try:
+        data = request.json or {}
+        nome_flag = data.get('flag', '').strip()
+        
+        if not nome_flag:
+            return jsonify({'success': False, 'error': 'Nome da flag é obrigatório'}), 400
+        
+        # Validar nome da flag para evitar path traversal
+        if '..' in nome_flag or '/' in nome_flag or '\\' in nome_flag:
+            return jsonify({'success': False, 'error': 'Nome de flag inválido'}), 400
+        
+        # Remover arquivo flag do WORKDIR
+        flag_path = Path(WORKDIR) / nome_flag
+        
+        if flag_path.exists():
+            flag_path.unlink()
+            return jsonify({
+                'success': True,
+                'mensagem': f'Flag {nome_flag} removida com sucesso'
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'mensagem': f'Flag {nome_flag} não existia'
+            })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/internacoes-solicitar/enviar-comando', methods=['POST'])
+@login_required
+def enviar_comando_terminal():
+    """Envia comando ao terminal do processo em execução (para interação durante -spa)"""
+    try:
+        data = request.json or {}
+        session_id = data.get('session_id')
+        comando = data.get('comando', '').strip()
+        
+        if not session_id:
+            return jsonify({'success': False, 'error': 'session_id é obrigatório'}), 400
+        
+        if not comando:
+            return jsonify({'success': False, 'error': 'comando é obrigatório'}), 400
+        
+        with processos_lock:
+            if session_id not in processos_stdin:
+                return jsonify({'success': False, 'error': 'Nenhum processo em execução com stdin disponível'}), 404
+            
+            stdin = processos_stdin[session_id]
+            
+            try:
+                # Enviar comando + Enter
+                stdin.write(comando + '\n')
+                stdin.flush()
+                
+                return jsonify({
+                    'success': True,
+                    'mensagem': f'Comando "{comando}" enviado com sucesso'
+                })
+            except BrokenPipeError:
+                # Processo já terminou
+                if session_id in processos_stdin:
+                    del processos_stdin[session_id]
+                return jsonify({
+                    'success': False,
+                    'error': 'Processo já terminou'
+                }), 404
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'Erro ao enviar comando: {str(e)}'
+                }), 500
+                
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/internacoes-solicitar/interromper-execucao', methods=['POST'])
+@login_required
+def interromper_execucao_internacoes():
+    """Interrompe a execução dos comandos de solicitar internações"""
+    try:
+        data = request.json or {}
+        session_id = data.get('session_id', str(threading.current_thread().ident))
+        
+        with processos_lock:
+            if session_id in processos_ativos:
+                processo = processos_ativos[session_id]
+                
+                try:
+                    processo.terminate()
+                    try:
+                        processo.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        processo.kill()
+                        processo.wait()
+                    
+                    del processos_ativos[session_id]
+                    if session_id in processos_stdin:
+                        try:
+                            processos_stdin[session_id].close()
+                        except:
+                            pass
+                        del processos_stdin[session_id]
+                    
+                    return jsonify({
+                        'success': True,
+                        'mensagem': 'Processo interrompido com sucesso'
+                    })
+                except ProcessLookupError:
+                    if session_id in processos_ativos:
+                        del processos_ativos[session_id]
+                    if session_id in processos_stdin:
+                        del processos_stdin[session_id]
                     return jsonify({
                         'success': True,
                         'mensagem': 'Processo já havia terminado'

@@ -1,0 +1,38 @@
+<!-- Modal para Exibir Pendências de Internações -->
+<div class="glass-modal" id="modal-pendencias-internacoes">
+    <div class="glass-modal-content modal-extra-large">
+        <div class="modal-header">
+            <h2>Pendências de Internações</h2>
+            <button class="glass-modal-close" id="close-modal-pendencias-internacoes">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="spreadsheet-container">
+                <table class="editable-spreadsheet" id="spreadsheet-pendencias-internacoes">
+                    <thead id="spreadsheet-header-pendencias-internacoes">
+                        <!-- Cabeçalho será preenchido dinamicamente -->
+                    </thead>
+                    <tbody id="spreadsheet-body-pendencias-internacoes">
+                        <!-- Dados serão preenchidos dinamicamente -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="spreadsheet-info">
+                <i class="fas fa-info-circle"></i>
+                <p>Visualização e edição do arquivo solicita_inf_aih.csv com as pendências de internações. Este arquivo é gerado durante a execução dos comandos. Use as setas do teclado para navegar, Delete para remover linhas selecionadas e Salvar para gravar as alterações.</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="glass-button-action" id="btn-atualizar-pendencias-internacoes">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+            <button type="button" class="glass-button-action" id="btn-salvar-pendencias-internacoes">
+                <i class="fas fa-save"></i> Salvar
+            </button>
+            <button type="button" class="glass-button-action" id="btn-fechar-pendencias-internacoes">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>

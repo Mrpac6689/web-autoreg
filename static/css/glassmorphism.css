@@ -325,6 +325,28 @@ body::before {
     display: flex;
 }
 
+/* Modal do robô deve ficar acima do modal principal */
+#modal-robo-spa {
+    z-index: 10002 !important;
+    pointer-events: auto !important;
+}
+
+#modal-robo-spa.active {
+    pointer-events: auto !important;
+}
+
+#modal-robo-spa .glass-modal-content {
+    z-index: 10003 !important;
+    pointer-events: auto !important;
+}
+
+/* Header actions para modal do robô */
+#modal-robo-spa .modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .glass-modal-content {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-backdrop);
@@ -705,6 +727,112 @@ body::before {
 .glass-modal-close:hover {
     background: rgba(255, 255, 255, 0.3);
     transform: rotate(90deg);
+}
+
+/* Botões de minimizar e maximizar */
+.glass-modal-minimize,
+.glass-modal-maximize {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--glass-border);
+    border-top: 1px solid var(--glass-border-top);
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    color: var(--text-light);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.glass-modal-minimize:hover,
+.glass-modal-maximize:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+/* Estado minimizado do modal do robô */
+#modal-robo-spa.minimized {
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 20px;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    pointer-events: none;
+    /* Remover qualquer overlay ou backdrop */
+    box-shadow: none !important;
+}
+
+/* Garantir que não há overlay quando minimizado */
+#modal-robo-spa.minimized::before,
+#modal-robo-spa.minimized::after {
+    display: none !important;
+    content: none !important;
+}
+
+#modal-robo-spa.minimized .glass-modal-content {
+    max-width: 400px;
+    width: 400px;
+    max-height: 80px;
+    height: auto;
+    margin: 0;
+    animation: minimizeModal 0.3s ease;
+    pointer-events: auto;
+}
+
+#modal-robo-spa.minimized .modal-body {
+    display: none !important;
+}
+
+#modal-robo-spa.minimized .modal-header {
+    padding: 15px 20px;
+    cursor: pointer;
+    margin: 0;
+    border-bottom: none;
+    pointer-events: auto;
+}
+
+#modal-robo-spa.minimized .modal-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+#modal-robo-spa.minimized .modal-header h2 {
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+#modal-robo-spa.minimized .floating-buttons-container {
+    display: none !important;
+}
+
+#modal-robo-spa:not(.minimized) .glass-modal-content {
+    animation: maximizeModal 0.3s ease;
+}
+
+@keyframes minimizeModal {
+    from {
+        transform: scale(1);
+        opacity: 1;
+    }
+    to {
+        transform: scale(0.8);
+        opacity: 0.9;
+    }
+}
+
+@keyframes maximizeModal {
+    from {
+        transform: scale(0.8);
+        opacity: 0.9;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 /* Rodapé */
@@ -1424,6 +1552,75 @@ body::before {
     transform: scale(1.1);
 }
 
+/* Container para botões flutuantes redondos no modal do robô */
+.floating-buttons-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+/* Botões flutuantes redondos */
+.floating-action-button-round {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-backdrop);
+    -webkit-backdrop-filter: var(--glass-backdrop);
+    border: 2px solid var(--glass-border);
+    border-top: 2px solid var(--glass-border-top);
+    color: var(--text-light);
+    font-size: 1.4rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: var(--glass-shadow);
+    pointer-events: auto;
+}
+
+.floating-action-button-round:hover {
+    background: var(--glass-bg-hover);
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: var(--glass-shadow-hover);
+}
+
+.floating-action-button-round:active {
+    transform: translateY(-1px) scale(0.98);
+}
+
+.floating-action-button-round i {
+    pointer-events: none;
+}
+
+/* Botão salvar - cor verde */
+.floating-action-button-round#btn-salvar-spa {
+    background: rgba(76, 175, 80, 0.3);
+    border-color: rgba(76, 175, 80, 0.5);
+}
+
+.floating-action-button-round#btn-salvar-spa:hover {
+    background: rgba(76, 175, 80, 0.5);
+    border-color: rgba(76, 175, 80, 0.7);
+}
+
+/* Botão pular - cor laranja */
+.floating-action-button-round#btn-pular-spa {
+    background: rgba(255, 152, 0, 0.3);
+    border-color: rgba(255, 152, 0, 0.5);
+}
+
+.floating-action-button-round#btn-pular-spa:hover {
+    background: rgba(255, 152, 0, 0.5);
+    border-color: rgba(255, 152, 0, 0.7);
+}
+
 /* Container do iframe no modal */
 .iframe-container {
     background: rgba(0, 0, 0, 0.2);
@@ -1435,6 +1632,11 @@ body::before {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    /* Otimizações de performance */
+    contain: layout style paint;
+    will-change: contents;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 .robo-iframe {
@@ -1444,6 +1646,20 @@ body::before {
     border: none;
     background: white;
     min-height: 0;
+    /* Otimizações de performance */
+    will-change: contents;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    /* Acelerar renderização */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+/* Quando minimizado, ocultar iframe completamente */
+#modal-robo-spa.minimized .robo-iframe {
+    display: none;
+    visibility: hidden;
+    opacity: 0;
 }
 
 /* Ajustar modal para iframe grande */
@@ -1461,6 +1677,12 @@ body::before {
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+    position: relative;
+    /* Otimizações de performance */
+    contain: layout style;
+    will-change: contents;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 /* Ações no header do modal */
