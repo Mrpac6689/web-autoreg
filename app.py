@@ -228,7 +228,7 @@ def load_exames_csv():
     csv_path = Path(WORKDIR) / 'exames_solicitar.csv'
     
     # Cabeçalho padrão do CSV
-    CABECALHO_PADRAO = ['ra', 'hora', 'cns', 'procedimento', 'chave', 'solicitacao']
+    CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'chave', 'solicitacao']
     
     try:
         # Garantir que o diretório existe
@@ -286,18 +286,34 @@ def save_exames_csv():
         csv_path = Path(WORKDIR) / 'exames_solicitar.csv'
         
         # Cabeçalho padrão que DEVE ser preservado
-        CABECALHO_PADRAO = ['ra', 'hora', 'cns', 'procedimento', 'chave', 'solicitacao']
+        CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'chave', 'solicitacao']
         
         # Garantir que o diretório existe
         csv_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Garantir que a primeira linha sempre seja o cabeçalho correto
         if len(data) > 0:
-            # Forçar cabeçalho na primeira posição
-            data[0] = CABECALHO_PADRAO
+            # Usar o cabeçalho recebido do frontend (que já está correto)
+            # Mas garantir que tem o número correto de colunas
+            if len(data[0]) != len(CABECALHO_PADRAO):
+                # Se o cabeçalho recebido não tiver o número correto de colunas, usar o padrão
+                data[0] = CABECALHO_PADRAO
+            else:
+                # Usar o cabeçalho recebido, mas garantir que está correto
+                data[0] = CABECALHO_PADRAO
         else:
             # Se não houver dados, criar apenas com cabeçalho
             data = [CABECALHO_PADRAO]
+        
+        # Garantir que todas as linhas de dados tenham o número correto de colunas
+        num_cols = len(CABECALHO_PADRAO)
+        for i in range(1, len(data)):
+            if len(data[i]) < num_cols:
+                # Adicionar colunas vazias se necessário
+                data[i].extend([''] * (num_cols - len(data[i])))
+            elif len(data[i]) > num_cols:
+                # Remover colunas extras se necessário
+                data[i] = data[i][:num_cols]
         
         # Debug: verificar o que está sendo recebido
         print(f"Recebido {len(data)} linhas para salvar")
@@ -1870,10 +1886,11 @@ def load_internacoes_csv():
         # Garantir que o diretório existe
         csv_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Se o arquivo não existir, criar arquivo vazio
+        # Se o arquivo não existir, criar com coluna 'ra'
         if not csv_path.exists():
             with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-                pass  # Arquivo vazio
+                writer = csv.writer(f)
+                writer.writerow(['ra'])
         
         # Ler o CSV
         data = []
@@ -1882,9 +1899,13 @@ def load_internacoes_csv():
             for row in reader:
                 data.append(row)
         
-        # Se o arquivo estava vazio, retornar array vazio (frontend tratará)
+        # Se o arquivo estava vazio, criar com coluna 'ra'
         if not data or len(data) == 0:
-            data = []
+            data = [['ra']]
+            # Salvar o cabeçalho no arquivo
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(['ra'])
         
         return jsonify({
             'success': True,
