@@ -228,7 +228,7 @@ def load_exames_csv():
     csv_path = Path(WORKDIR) / 'exames_solicitar.csv'
     
     # Cabeçalho padrão do CSV
-    CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'chave', 'solicitacao']
+    CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'dividir', 'cns', 'procedimento', 'chave', 'solicitacao']
     
     try:
         # Garantir que o diretório existe
@@ -286,7 +286,7 @@ def save_exames_csv():
         csv_path = Path(WORKDIR) / 'exames_solicitar.csv'
         
         # Cabeçalho padrão que DEVE ser preservado
-        CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'chave', 'solicitacao']
+        CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'dividir', 'cns', 'procedimento', 'chave', 'solicitacao']
         
         # Garantir que o diretório existe
         csv_path.parent.mkdir(parents=True, exist_ok=True)

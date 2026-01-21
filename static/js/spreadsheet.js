@@ -220,7 +220,7 @@ function renderSpreadsheet() {
     body.innerHTML = '';
     
     // Cabeçalho padrão do CSV
-    const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'chave', 'solicitacao'];
+    const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'dividir', 'cns', 'procedimento', 'chave', 'solicitacao'];
     
     // Garantir que sempre há pelo menos o cabeçalho
     if (spreadsheetData.length === 0) {
@@ -449,7 +449,7 @@ function updateCellData(cell) {
     // NUNCA permitir editar a primeira linha (cabeçalho)
     if (row === 0) {
         // Restaurar o valor original do cabeçalho
-        const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'chave', 'solicitacao'];
+        const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'dividir', 'cns', 'procedimento', 'chave', 'solicitacao'];
         if (spreadsheetData[0] && spreadsheetData[0][col] !== CABECALHO_PADRAO[col]) {
             spreadsheetData[0][col] = CABECALHO_PADRAO[col];
             cell.textContent = CABECALHO_PADRAO[col];
@@ -995,8 +995,8 @@ function handleCellKeydown(e, cell) {
         // Salvar o conteúdo atual antes de mover
         updateCellData(cell);
         
-        // Se estiver na coluna hora (col 1) ou cns (col 3), ir para a célula abaixo na coluna ra (col 0)
-        if (col === 1 || col === 3) {
+        // Se estiver na coluna hora (col 1) ou cns (col 4), ir para a célula abaixo na coluna ra (col 0)
+        if (col === 1 || col === 4) {
             const targetCol = 0; // Coluna ra
             
             // Se estiver na última linha, adicionar uma nova
@@ -1211,7 +1211,7 @@ async function limparPlanilha() {
 function salvarPlanilha() {
     return new Promise((resolve, reject) => {
         // Cabeçalho padrão que DEVE ser preservado
-        const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'chave', 'solicitacao'];
+        const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'dividir', 'cns', 'procedimento', 'chave', 'solicitacao'];
         
         // SIMPLIFICADO: Salvar TODAS as linhas do spreadsheetData
         // spreadsheetData[0] = cabeçalho (será substituído pelo padrão)
