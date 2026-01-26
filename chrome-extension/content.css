@@ -1,0 +1,140 @@
+/**
+ * Estilos para botões flutuantes da extensão Autoreg CMS Helper
+ * Replica o estilo glassmorphism dos botões da aplicação principal
+ */
+
+.autoreg-floating-buttons-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    z-index: 999999;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Roboto', 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Botões flutuantes redondos */
+.autoreg-floating-action-button-round {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top: 2px solid rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.95);
+    font-size: 1.4rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    pointer-events: auto;
+    position: relative;
+}
+
+.autoreg-floating-action-button-round:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
+}
+
+.autoreg-floating-action-button-round:active {
+    transform: translateY(-1px) scale(0.98);
+}
+
+.autoreg-floating-action-button-round:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.autoreg-floating-action-button-round i {
+    pointer-events: none;
+}
+
+/* Botão salvar - cor verde */
+.autoreg-floating-action-button-round.autoreg-btn-salvar {
+    background: rgba(76, 175, 80, 0.3);
+    border-color: rgba(76, 175, 80, 0.5);
+}
+
+.autoreg-floating-action-button-round.autoreg-btn-salvar:hover:not(:disabled) {
+    background: rgba(76, 175, 80, 0.5);
+    border-color: rgba(76, 175, 80, 0.7);
+}
+
+/* Botão pular - cor laranja */
+.autoreg-floating-action-button-round.autoreg-btn-pular {
+    background: rgba(255, 152, 0, 0.3);
+    border-color: rgba(255, 152, 0, 0.5);
+}
+
+.autoreg-floating-action-button-round.autoreg-btn-pular:hover:not(:disabled) {
+    background: rgba(255, 152, 0, 0.5);
+    border-color: rgba(255, 152, 0, 0.7);
+}
+
+/* Loading spinner */
+.autoreg-floating-action-button-round .autoreg-spinner {
+    display: none;
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    animation: autoreg-spin 0.6s linear infinite;
+}
+
+.autoreg-floating-action-button-round.loading .autoreg-spinner {
+    display: block;
+}
+
+.autoreg-floating-action-button-round.loading i {
+    display: none;
+}
+
+@keyframes autoreg-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Notificação de feedback */
+.autoreg-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    color: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+    font-size: 14px;
+    z-index: 999998;
+    opacity: 0;
+    transform: translateY(100px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+    max-width: 300px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.autoreg-notification.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.autoreg-notification.success {
+    border-left: 4px solid rgba(76, 175, 80, 0.8);
+}
+
+.autoreg-notification.error {
+    border-left: 4px solid rgba(244, 67, 54, 0.8);
+}

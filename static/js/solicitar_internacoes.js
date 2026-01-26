@@ -11,6 +11,7 @@
     let sessionId = null;
     let readerAtual = null;
     let modalRoboAberto = false;
+    let abaCms = null; // Referência à aba do CMS aberta
     
     /**
      * Inicializa o modal de solicitar internações
@@ -265,62 +266,44 @@
     }
     
     /**
-     * Abre o modal do robô
+     * Abre o CMS em nova aba (substitui o modal do robô)
      */
     function abrirModalRobo() {
-        const modalRobo = document.getElementById('modal-robo-spa');
-        if (modalRobo) {
-            console.log('Abrindo modal do robô...');
-            modalRobo.classList.add('active');
-            modalRoboAberto = true;
-            // Não alterar overflow do body pois o modal principal já está aberto
-            
-            // Carregar iframe apenas quando o modal for aberto (lazy loading)
-            const iframeRobo = document.getElementById('iframe-robo-spa');
-            if (iframeRobo) {
-                // Usar URL direta para melhor performance (sem proxy se possível)
-                // O proxy pode adicionar latência, então vamos tentar direto primeiro
-                const targetUrl = 'https://cms.michelpaes.com.br';
-                
-                // Só carregar se ainda não foi carregado ou se está em about:blank
-                const currentSrc = iframeRobo.src;
-                if (!currentSrc || currentSrc === 'about:blank' || currentSrc === '' || currentSrc.includes('about:blank')) {
-                    // Usar requestIdleCallback se disponível para não bloquear a UI
-                    if (window.requestIdleCallback) {
-                        requestIdleCallback(() => {
-                            iframeRobo.src = targetUrl;
-                            console.log('Iframe do robô carregado (idle)');
-                        }, { timeout: 500 });
-                    } else {
-                        // Fallback: usar requestAnimationFrame com delay menor
-                        requestAnimationFrame(() => {
-                            setTimeout(() => {
-                                iframeRobo.src = targetUrl;
-                                console.log('Iframe do robô carregado');
-                            }, 100);
-                        });
-                    }
-                } else if (iframeRobo.dataset.originalSrc) {
-                    // Se estava minimizado, restaurar src original
-                    iframeRobo.src = iframeRobo.dataset.originalSrc;
-                }
-            }
+        // Ao invés de abrir modal com iframe, abrir nova aba
+        const targetUrl = 'https://cms.michelpaes.com.br';
+        
+        // Se já existe uma aba aberta, focar nela
+        if (abaCms && !abaCms.closed) {
+            abaCms.focus();
+            console.log('Focando na aba do CMS já aberta');
         } else {
-            console.error('Modal do robô não encontrado!');
+            // Abrir nova aba
+            abaCms = window.open(targetUrl, '_blank');
+            if (abaCms) {
+                console.log('Abrindo CMS em nova aba:', targetUrl);
+                modalRoboAberto = true;
+                adicionarLinhaTerminal('\n📂 CMS aberto em nova aba. Use os botões flutuantes da extensão para interagir.');
+            } else {
+                console.error('Erro ao abrir nova aba. Verifique se os pop-ups estão bloqueados.');
+                adicionarLinhaTerminal('\n❌ Erro: Não foi possível abrir o CMS. Verifique se os pop-ups estão permitidos.');
+            }
         }
     }
     
     /**
-     * Fecha o modal do robô
+     * Fecha a aba do CMS (substitui fechar modal do robô)
      */
     function fecharModalRobo() {
-        const modalRobo = document.getElementById('modal-robo-spa');
-        if (modalRobo) {
-            modalRobo.classList.remove('active');
-            modalRobo.classList.remove('minimized');
-            modalRoboAberto = false;
-            // Não restaurar overflow aqui, pois o modal principal ainda está aberto
+        if (abaCms && !abaCms.closed) {
+            // Tentar fechar a aba (pode não funcionar se o usuário não permitir)
+            try {
+                abaCms.close();
+            } catch (e) {
+                console.log('Não foi possível fechar a aba automaticamente:', e);
+            }
         }
+        abaCms = null;
+        modalRoboAberto = false;
     }
     
     /**
@@ -340,6 +323,7 @@
         totalComandos = 4; // -spa -sia -ssr -snt
         sessionId = Date.now().toString();
         modalRoboAberto = false;
+        abaCms = null;
         atualizarBotoes();
         
         // Esconder ETA inicialmente
@@ -645,11 +629,11 @@
                         case 'aguardando_input':
                             // Comando está aguardando input do usuário
                             adicionarLinhaTerminal(`\n⏸️ Aguardando interação do usuário...`);
-                            adicionarLinhaTerminal('Use os botões flutuantes para Salvar ou Pular');
+                            adicionarLinhaTerminal('Use os botões flutuantes da extensão Chrome na página do CMS para Salvar ou Pular');
                             
-                            // Se for o primeiro comando (-spa) e o modal do robô ainda não estiver aberto, abrir
+                            // Se for o primeiro comando (-spa) e a aba do CMS ainda não estiver aberta, abrir
                             if (comandoAtual === 0 && !modalRoboAberto) {
-                                console.log('Evento aguardando_input recebido - abrindo modal do robô');
+                                console.log('Evento aguardando_input recebido - abrindo CMS em nova aba');
                                 abrirModalRobo();
                             }
                             break;

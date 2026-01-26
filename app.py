@@ -3,7 +3,7 @@ AUTOREG - Sistema Automatizado de operações G-HOSP e SISREG
 Aplicação Flask principal
 """
 
-from flask import Flask, render_template, request, jsonify, Response, send_file, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, Response, send_file, session, redirect, url_for, make_response
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from datetime import datetime
 import csv
@@ -29,6 +29,30 @@ warnings.filterwarnings('ignore', category=InsecureRequestWarning)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'autoreg-secret-key-change-in-production'
+# Configurar cookie de sessão para compartilhar entre subdomínios
+app.config['SESSION_COOKIE_DOMAIN'] = '.michelpaes.com.br'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = True  # Apenas HTTPS
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Função para adicionar headers CORS
+def adicionar_cors_headers(response):
+    """Adiciona headers CORS para permitir requisições de extensões Chrome"""
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Cookie'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    return response
+
+# Função auxiliar para criar resposta JSON com CORS
+def jsonify_with_cors(data, status_code=200):
+    """Cria resposta JSON com headers CORS"""
+    response = jsonify(data)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response, status_code
+
+# Aplicar CORS a todas as respostas
+app.after_request(adicionar_cors_headers)
 
 # Configurar Flask-Login
 login_manager = LoginManager()
@@ -170,7 +194,15 @@ def api_login():
     if usuario:
         user = User(usuario['username'], usuario['nome'])
         login_user(user, remember=True)
-        return jsonify({'success': True, 'username': usuario['username'], 'nome': usuario['nome']})
+        
+        # Criar resposta JSON e adicionar cookie para nginx
+        response = jsonify({'success': True, 'username': usuario['username'], 'nome': usuario['nome']})
+        try:
+            response.set_cookie('autoreg_auth', 'authenticated', domain='.michelpaes.com.br', secure=True, max_age=2592000)
+        except Exception as e:
+            # Se houver erro ao definir cookie, apenas logar e continuar
+            print(f"Erro ao definir cookie: {e}")
+        return response
     else:
         return jsonify({'success': False, 'error': 'Usuário ou senha inválidos'}), 401
 
@@ -180,8 +212,14 @@ def api_login():
 def api_logout():
     """API para logout"""
     logout_user()
-    return jsonify({'success': True, 'message': 'Logout realizado com sucesso'})
-
+    
+    # Remover cookie de autenticação
+    response = jsonify({'success': True, 'message': 'Logout realizado com sucesso'})
+    try:
+        response.set_cookie('autoreg_auth', '', domain='.michelpaes.com.br', expires=0)
+    except Exception as e:
+        print(f"Erro ao remover cookie: {e}")
+    return response
 
 @app.route('/')
 @login_required
@@ -2392,6 +2430,153 @@ def executar_solicitar_internacoes():
     return response
 
 
+@app.route('/api/internacoes/grava', methods=['GET', 'OPTIONS'])
+def criar_flag_grava():
+    """Cria a flag grava.flag no WORKDIR - endpoint simples GET"""
+    if request.method == 'OPTIONS':
+        # Responder preflight CORS
+        response = make_response()
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Cookie'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    
+    # Verificar autenticação manualmente para GET
+    if not current_user.is_authenticated:
+        response = jsonify({'success': False, 'error': 'Não autenticado'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 401
+    
+    result = criar_flag_simples('grava.flag')
+    # Garantir que headers CORS estão na resposta
+    if isinstance(result, Response):
+        result.headers['Access-Control-Allow-Origin'] = '*'
+    return result
+
+@app.route('/api/internacoes/pula', methods=['GET', 'OPTIONS'])
+def criar_flag_pula():
+    """Cria a flag pula.flag no WORKDIR - endpoint simples GET"""
+    if request.method == 'OPTIONS':
+        # Responder preflight CORS
+        response = make_response()
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Cookie'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    
+    # Verificar autenticação manualmente para GET
+    if not current_user.is_authenticated:
+        response = jsonify({'success': False, 'error': 'Não autenticado'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 401
+    
+    result = criar_flag_simples('pula.flag')
+    # Garantir que headers CORS estão na resposta
+    if isinstance(result, Response):
+        result.headers['Access-Control-Allow-Origin'] = '*'
+    return result
+
+def criar_flag_simples(nome_flag):
+    """Função auxiliar para criar flags de forma simples"""
+    try:
+        # Validar nome da flag
+        flags_permitidas = ['grava.flag', 'pula.flag']
+        if nome_flag not in flags_permitidas:
+            response = jsonify({'success': False, 'error': 'Flag não permitida'})
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 400
+        
+        # Verificar se WORKDIR está definido
+        if not WORKDIR:
+            response = jsonify({'success': False, 'error': 'WORKDIR não configurado'})
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 500
+        
+        # Criar arquivo flag no WORKDIR
+        flag_path = Path(WORKDIR) / nome_flag
+        
+        # Garantir que o diretório existe
+        try:
+            flag_path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            response = jsonify({
+                'success': False,
+                'error': f'Erro ao criar diretório {flag_path.parent}: {str(e)}'
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 500
+        
+        # NÃO remover flag se já existe - apenas criar/sobrescrever
+        # A remoção será feita pelo processo Python que processa a flag
+        
+        # Criar arquivo flag (sobrescreve se já existir)
+        conteudo = ''
+        
+        # Criar flag localmente (Docker ou não, sempre tentar criar localmente primeiro)
+        # Se houver volume compartilhado, funcionará mesmo com Docker
+        try:
+            with open(flag_path, 'w', encoding='utf-8') as f:
+                f.write(conteudo)
+                f.flush()  # Forçar escrita imediata
+                import os
+                os.fsync(f.fileno())  # Sincronizar com disco
+        except PermissionError as e:
+            response = jsonify({
+                'success': False,
+                'error': f'Sem permissão para criar arquivo em {flag_path.parent}. WORKDIR: {WORKDIR}. Erro: {str(e)}'
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 500
+        except OSError as e:
+            response = jsonify({
+                'success': False,
+                'error': f'Erro do sistema ao criar arquivo {flag_path}. WORKDIR: {WORKDIR}. Erro: {str(e)}'
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 500
+        except Exception as e:
+            response = jsonify({
+                'success': False,
+                'error': f'Erro ao criar arquivo {flag_path}. WORKDIR: {WORKDIR}. Erro: {str(e)}'
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 500
+        
+        # Pequeno delay para garantir que o sistema de arquivos processe a escrita
+        import time
+        time.sleep(0.1)
+        
+        # Verificar se a flag foi realmente criada
+        if not flag_path.exists():
+            response = jsonify({
+                'success': False,
+                'error': f'Não foi possível criar a flag em {flag_path}. Verifique permissões do diretório {WORKDIR}.'
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 500
+        
+        response = jsonify({
+            'success': True,
+            'mensagem': f'Flag {nome_flag} criada com sucesso em {flag_path}'
+        })
+        # Adicionar headers CORS
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f'Erro ao criar flag {nome_flag}: {error_trace}')
+        response = jsonify({
+            'success': False,
+            'error': f'Erro inesperado: {str(e)}'
+        })
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
 @app.route('/api/internacoes-solicitar/criar-flag', methods=['POST'])
 @login_required
 def criar_flag():
@@ -2413,9 +2598,56 @@ def criar_flag():
         # Garantir que o diretório existe
         flag_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Criar arquivo flag
-        with open(flag_path, 'w', encoding='utf-8') as f:
-            f.write('pausar' if nome_flag == 'pause.flag' else '')
+        # Se a flag já existe, remover primeiro para garantir escrita limpa
+        if flag_path.exists():
+            try:
+                flag_path.unlink()
+            except Exception:
+                pass  # Ignorar erro se não conseguir remover
+        
+        # Criar arquivo flag com conteúdo apropriado
+        conteudo = 'pausar' if nome_flag == 'pause.flag' else ''
+        
+        # Se estiver usando Docker, criar flag dentro do container
+        if USE_DOCKER and DOCKER_CONTAINER:
+            try:
+                # Executar comando dentro do container para criar a flag
+                import subprocess
+                comando_docker = [
+                    'docker', 'exec', DOCKER_CONTAINER,
+                    'sh', '-c', f'echo "{conteudo}" > {flag_path.name}'
+                ]
+                resultado = subprocess.run(
+                    comando_docker,
+                    cwd=WORKDIR,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if resultado.returncode != 0:
+                    raise Exception(f'Erro ao criar flag no container: {resultado.stderr}')
+            except Exception as e:
+                # Se falhar no Docker, tentar criar localmente (pode funcionar se houver volume compartilhado)
+                with open(flag_path, 'w', encoding='utf-8') as f:
+                    f.write(conteudo)
+        else:
+            # Criar flag localmente
+            with open(flag_path, 'w', encoding='utf-8') as f:
+                f.write(conteudo)
+                f.flush()  # Forçar escrita imediata
+                import os
+                os.fsync(f.fileno())  # Sincronizar com disco
+        
+        # Pequeno delay para garantir que o sistema de arquivos processe a escrita
+        import time
+        time.sleep(0.1)
+        
+        # Verificar se a flag foi realmente criada
+        if not flag_path.exists():
+            return jsonify({
+                'success': False,
+                'error': 'Não foi possível criar a flag'
+            }), 500
         
         return jsonify({
             'success': True,
@@ -2442,6 +2674,14 @@ def remover_flag():
         # Validar nome da flag para evitar path traversal
         if '..' in nome_flag or '/' in nome_flag or '\\' in nome_flag:
             return jsonify({'success': False, 'error': 'Nome de flag inválido'}), 400
+        
+        # NÃO remover flags grava.flag e pula.flag - elas serão removidas pelo processo Python
+        flags_protegidas = ['grava.flag', 'pula.flag']
+        if nome_flag in flags_protegidas:
+            return jsonify({
+                'success': False,
+                'error': f'A flag {nome_flag} não pode ser removida via API. Ela será removida pelo processo que a processa.'
+            }), 403
         
         # Remover arquivo flag do WORKDIR
         flag_path = Path(WORKDIR) / nome_flag
@@ -2568,6 +2808,17 @@ def interromper_execucao_internacoes():
             'error': str(e)
         }), 500
 
+
+@app.route('/api/auth-check', methods=['GET'])
+def auth_check():
+    """
+    Endpoint para verificação de autenticação via nginx auth_request
+    Retorna 200 se autenticado, 401 se não autenticado
+    """
+    if current_user.is_authenticated:
+        return '', 200
+    else:
+        return '', 401
 
 if __name__ == '__main__':
     # Modo produção - escutar no IP do Tailscale
