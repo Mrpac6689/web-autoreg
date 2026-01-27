@@ -21,6 +21,7 @@
         const modal = document.getElementById('modal-solicitar-internacoes');
         const btnClose = document.getElementById('close-modal-solicitar-internacoes');
         const btnFechar = document.getElementById('btn-fechar-solicitar-internacoes');
+        const btnRevisarAIH = document.getElementById('btn-revisar-aih-internacoes');
         const btnIniciar = document.getElementById('btn-iniciar-processo-internacoes');
         const btnInterromper = document.getElementById('btn-interromper-processo-internacoes');
         const btnExibirPendencias = document.getElementById('btn-exibir-pendencias-internacoes');
@@ -97,9 +98,15 @@
             });
         }
         
+        if (btnRevisarAIH) {
+            btnRevisarAIH.addEventListener('click', function() {
+                revisarSolicitacoesAIH();
+            });
+        }
+        
         if (btnIniciar) {
             btnIniciar.addEventListener('click', function() {
-                iniciarProcesso();
+                iniciarSolicitacoes();
             });
         }
         
@@ -363,7 +370,7 @@
         resetarTerminal();
         isExecutando = false;
         comandoAtual = 0;
-        totalComandos = 4; // -spa -sia -ssr -snt
+        totalComandos = 3; // -sia -ssr -snt (para iniciar solicitações)
         sessionId = Date.now().toString();
         modalRoboAberto = false;
         abaCms = null;
@@ -400,15 +407,14 @@
     }
     
     /**
-     * Inicia o processo de execução dos comandos
+     * Revisa as solicitações AIH (executa -spa e grava produção)
      */
-    function iniciarProcesso() {
+    function revisarSolicitacoesAIH() {
         if (isExecutando) {
             return;
         }
         
         isExecutando = true;
-        comandoAtual = 0;
         sessionId = Date.now().toString();
         
         atualizarBotoes();
@@ -420,11 +426,250 @@
         }
         
         resetarTerminal();
-        adicionarLinhaTerminal('Iniciando processo de solicitação de internações...');
+        adicionarLinhaTerminal('Iniciando revisão de solicitações AIH...');
+        adicionarLinhaTerminal('Executando comando: -spa');
         atualizarETA('Preparando...', 0, 'Aguardando início');
         
-        // Executar primeiro comando
-        executarProximoComando();
+        // Executar comando -spa com gravação de produção
+        executarRevisarAIH();
+    }
+    
+    /**
+     * Executa o comando -spa e grava a produção
+     */
+    function executarRevisarAIH() {
+        // Se for o primeiro comando (-spa), abrir modal do robô imediatamente
+        setTimeout(() => {
+            abrirModalRobo();
+        }, 500);
+        
+        atualizarETA('Executando -spa...', 0, 'Revisando solicitações AIH');
+        
+        fetch('/api/internacoes-solicitar/revisar-aih', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                session_id: sessionId
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Erro na resposta do servidor');
+            }
+            
+            const reader = response.body.getReader();
+            readerAtual = reader;
+            const decoder = new TextDecoder();
+            let buffer = '';
+            
+            function lerStream(tentativas = 0) {
+                const maxTentativas = 5;
+                const delayRetry = 2000; // 2 segundos
+                
+                reader.read().then(({ done, value }) => {
+                    if (done) {
+                        if (buffer.trim()) {
+                            const linhas = buffer.split('\n');
+                            linhas.forEach(linha => {
+                                if (linha.startsWith('data: ')) {
+                                    processarEventoRevisar(linha.substring(6));
+                                }
+                            });
+                        }
+                        return;
+                    }
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const linhas = buffer.split('\n');
+                    buffer = linhas.pop() || '';
+                    
+                    linhas.forEach(linha => {
+                        if (linha.startsWith('data: ')) {
+                            processarEventoRevisar(linha.substring(6));
+                        }
+                    });
+                    
+                    lerStream(0); // Resetar tentativas em caso de sucesso
+                }).catch(error => {
+                    console.error('Erro ao ler stream:', error);
+                    const errorMsg = error.message.toLowerCase();
+                    
+                    // Verificar se é network error e ainda há tentativas
+                    if ((errorMsg.includes('network error') || errorMsg.includes('failed to fetch') || errorMsg.includes('networkerror')) && tentativas < maxTentativas) {
+                        adicionarLinhaTerminal(`\n⚠️ Erro de rede detectado. Tentando reconectar... (${tentativas + 1}/${maxTentativas})`);
+                        
+                        // Tentar reconectar após delay
+                        setTimeout(() => {
+                            // Recriar a requisição para retomar o processo
+                            fetch('/api/internacoes-solicitar/revisar-aih', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    session_id: sessionId
+                                })
+                            })
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error('Erro na resposta do servidor');
+                                }
+                                
+                                const newReader = response.body.getReader();
+                                readerAtual = newReader;
+                                const newDecoder = new TextDecoder();
+                                buffer = ''; // Resetar buffer
+                                
+                                // Continuar leitura com nova conexão
+                                lerStream(tentativas + 1);
+                            })
+                            .catch(retryError => {
+                                if (tentativas + 1 < maxTentativas) {
+                                    lerStream(tentativas + 1);
+                                } else {
+                                    adicionarLinhaTerminal(`\n❌ Erro ao executar comando após ${maxTentativas} tentativas: ${retryError.message}`);
+                                    finalizarExecucao(false);
+                                }
+                            });
+                        }, delayRetry);
+                    } else {
+                        adicionarLinhaTerminal(`\n❌ Erro ao executar comando: ${error.message}`);
+                        finalizarExecucao(false);
+                    }
+                });
+            }
+            
+            function processarEventoRevisar(dadosJson) {
+                try {
+                    const data = JSON.parse(dadosJson);
+                    
+                    switch(data.tipo) {
+                        case 'inicio':
+                            adicionarLinhaTerminal(`\n>>> Iniciando: ${data.comando}`);
+                            break;
+                            
+                        case 'output':
+                            adicionarLinhaTerminal(data.linha);
+                            break;
+                            
+                        case 'aguardando_input':
+                            adicionarLinhaTerminal(`\n⏸️ Aguardando interação do usuário...`);
+                            adicionarLinhaTerminal('Use os botões flutuantes da extensão Chrome na página do CMS para Salvar ou Pular');
+                            
+                            // Se a aba do CMS ainda não estiver aberta, abrir
+                            if (!modalRoboAberto) {
+                                console.log('Evento aguardando_input recebido - abrindo CMS em nova aba');
+                                abrirModalRobo();
+                            }
+                            break;
+                            
+                        case 'info':
+                            adicionarLinhaTerminal(`\nℹ️ ${data.mensagem}`);
+                            break;
+                            
+                        case 'aviso':
+                            adicionarLinhaTerminal(`\n⚠️ ${data.mensagem}`);
+                            break;
+                            
+                        case 'sucesso':
+                            atualizarETA('Concluído!', 100, 'Revisão concluída com sucesso');
+                            adicionarLinhaTerminal(`\n✅ ${data.mensagem || 'Revisão de solicitações AIH concluída com sucesso!'}`);
+                            
+                            // Fechar modal do robô se estiver aberto
+                            if (modalRoboAberto) {
+                                fecharModalRobo();
+                            }
+                            
+                            finalizarExecucao(true);
+                            break;
+                            
+                        case 'erro':
+                            adicionarLinhaTerminal(`\n❌ Erro: ${data.mensagem}`);
+                            // Fechar modal do robô mesmo em erro
+                            if (modalRoboAberto) {
+                                fecharModalRobo();
+                            }
+                            finalizarExecucao(false);
+                            break;
+                    }
+                } catch (e) {
+                    console.error('Erro ao processar evento:', e, dadosJson);
+                }
+            }
+            
+            lerStream();
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            adicionarLinhaTerminal(`\n❌ Erro ao executar comando: ${error.message}`);
+            finalizarExecucao(false);
+        });
+    }
+    
+    /**
+     * Inicia o processo de solicitações (executa -sia -ssr -snt)
+     */
+    function iniciarSolicitacoes() {
+        if (isExecutando) {
+            return;
+        }
+        
+        isExecutando = true;
+        comandoAtual = 1; // Começar em -sia (índice 1)
+        totalComandos = 3; // Apenas 3 comandos (-sia, -ssr, -snt)
+        sessionId = Date.now().toString();
+        
+        atualizarBotoes();
+        
+        // Mostrar ETA
+        const etaContainer = document.getElementById('eta-container-solicitar-internacoes');
+        if (etaContainer) {
+            etaContainer.style.display = 'block';
+        }
+        
+        resetarTerminal();
+        adicionarLinhaTerminal('Iniciando solicitações de internações...');
+        adicionarLinhaTerminal('Gravando produção no relatório...');
+        atualizarETA('Gravando produção...', 0, 'Registrando produção');
+        
+        // Primeiro, gravar a produção no relatório
+        fetch('/api/internacoes-solicitar/gravar-producao', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                adicionarLinhaTerminal(`✅ ${data.mensagem}`);
+                adicionarLinhaTerminal('Executando comandos: -sia -ssr -snt');
+                atualizarETA('Preparando...', 0, 'Aguardando início');
+                
+                // Executar primeiro comando (-sia) após gravar produção
+                executarProximoComando();
+            } else {
+                adicionarLinhaTerminal(`⚠️ Aviso: ${data.error || 'Erro ao gravar produção'}`);
+                adicionarLinhaTerminal('Continuando com a execução dos comandos...');
+                adicionarLinhaTerminal('Executando comandos: -sia -ssr -snt');
+                atualizarETA('Preparando...', 0, 'Aguardando início');
+                
+                // Continuar mesmo com erro na gravação
+                executarProximoComando();
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao gravar produção:', error);
+            adicionarLinhaTerminal(`⚠️ Aviso: Erro ao gravar produção: ${error.message}`);
+            adicionarLinhaTerminal('Continuando com a execução dos comandos...');
+            adicionarLinhaTerminal('Executando comandos: -sia -ssr -snt');
+            atualizarETA('Preparando...', 0, 'Aguardando início');
+            
+            // Continuar mesmo com erro na gravação
+            executarProximoComando();
+        });
     }
     
     /**
@@ -497,7 +742,10 @@
             const decoder = new TextDecoder();
             let buffer = '';
             
-            function lerStream() {
+            function lerStream(tentativas = 0) {
+                const maxTentativas = 5;
+                const delayRetry = 2000; // 2 segundos
+                
                 reader.read().then(({ done, value }) => {
                     if (done) {
                         if (buffer.trim()) {
@@ -521,11 +769,54 @@
                         }
                     });
                     
-                    lerStream();
+                    lerStream(0); // Resetar tentativas em caso de sucesso
                 }).catch(error => {
                     console.error('Erro ao ler stream:', error);
-                    adicionarLinhaTerminal(`\n❌ Erro ao executar comando: ${error.message}`);
-                    finalizarExecucao(false);
+                    const errorMsg = error.message.toLowerCase();
+                    
+                    // Verificar se é network error e ainda há tentativas
+                    if ((errorMsg.includes('network error') || errorMsg.includes('failed to fetch') || errorMsg.includes('networkerror')) && tentativas < maxTentativas) {
+                        adicionarLinhaTerminal(`\n⚠️ Erro de rede detectado. Tentando reconectar... (${tentativas + 1}/${maxTentativas})`);
+                        
+                        // Tentar reconectar após delay
+                        setTimeout(() => {
+                            // Recriar a requisição para retomar o processo
+                            fetch('/api/internacoes-solicitar/executar', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    session_id: sessionId,
+                                    comando_index: comandoAtual
+                                })
+                            })
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error('Erro na resposta do servidor');
+                                }
+                                
+                                const newReader = response.body.getReader();
+                                readerAtual = newReader;
+                                const newDecoder = new TextDecoder();
+                                buffer = ''; // Resetar buffer
+                                
+                                // Continuar leitura com nova conexão
+                                lerStream(tentativas + 1);
+                            })
+                            .catch(retryError => {
+                                if (tentativas + 1 < maxTentativas) {
+                                    lerStream(tentativas + 1);
+                                } else {
+                                    adicionarLinhaTerminal(`\n❌ Erro ao executar comando após ${maxTentativas} tentativas: ${retryError.message}`);
+                                    finalizarExecucao(false);
+                                }
+                            });
+                        }, delayRetry);
+                    } else {
+                        adicionarLinhaTerminal(`\n❌ Erro ao executar comando: ${error.message}`);
+                        finalizarExecucao(false);
+                    }
                 });
             }
             
@@ -579,30 +870,24 @@
     }
     
     /**
-     * Executa o próximo comando na sequência
+     * Executa o próximo comando na sequência (apenas -sia, -ssr, -snt)
      */
     function executarProximoComando() {
-        if (comandoAtual >= totalComandos) {
+        // Comando atual relativo aos comandos de solicitação (0 = -sia, 1 = -ssr, 2 = -snt)
+        const comandoRelativo = comandoAtual - 1;
+        
+        if (comandoRelativo >= totalComandos) {
             atualizarETA('Concluído!', 100, 'Todos os comandos executados');
             adicionarLinhaTerminal('\n✅ Processo concluído com sucesso!');
             finalizarExecucao(true);
             return;
         }
         
-        const comandos = ['-spa', '-sia', '-ssr', '-snt'];
-        const nomeComando = comandos[comandoAtual];
+        const comandos = ['-sia', '-ssr', '-snt'];
+        const nomeComando = comandos[comandoRelativo];
         
         adicionarLinhaTerminal(`\n>>> Executando comando: ${nomeComando}`);
-        
-        // Se for o primeiro comando (-spa), abrir modal do robô imediatamente
-        // pois o processo será pausado pela flag pause.flag
-        if (comandoAtual === 0) {
-            // Pequeno delay para garantir que o modal principal está totalmente renderizado
-            setTimeout(() => {
-                abrirModalRobo();
-            }, 500);
-        }
-        atualizarETA(`Executando ${nomeComando}...`, (comandoAtual / totalComandos) * 100, `Comando ${comandoAtual + 1} de ${totalComandos}`);
+        atualizarETA(`Executando ${nomeComando}...`, (comandoRelativo / totalComandos) * 100, `Comando ${comandoRelativo + 1} de ${totalComandos}`);
         
         fetch('/api/internacoes-solicitar/executar', {
             method: 'POST',
@@ -624,7 +909,10 @@
             const decoder = new TextDecoder();
             let buffer = '';
             
-            function lerStream() {
+            function lerStream(tentativas = 0) {
+                const maxTentativas = 5;
+                const delayRetry = 2000; // 2 segundos
+                
                 reader.read().then(({ done, value }) => {
                     if (done) {
                         if (buffer.trim()) {
@@ -648,11 +936,54 @@
                         }
                     });
                     
-                    lerStream();
+                    lerStream(0); // Resetar tentativas em caso de sucesso
                 }).catch(error => {
                     console.error('Erro ao ler stream:', error);
-                    adicionarLinhaTerminal(`\n❌ Erro ao executar comando: ${error.message}`);
-                    finalizarExecucao(false);
+                    const errorMsg = error.message.toLowerCase();
+                    
+                    // Verificar se é network error e ainda há tentativas
+                    if ((errorMsg.includes('network error') || errorMsg.includes('failed to fetch') || errorMsg.includes('networkerror')) && tentativas < maxTentativas) {
+                        adicionarLinhaTerminal(`\n⚠️ Erro de rede detectado. Tentando reconectar... (${tentativas + 1}/${maxTentativas})`);
+                        
+                        // Tentar reconectar após delay
+                        setTimeout(() => {
+                            // Recriar a requisição para retomar o processo
+                            fetch('/api/internacoes-solicitar/executar', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    session_id: sessionId,
+                                    comando_index: comandoAtual
+                                })
+                            })
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error('Erro na resposta do servidor');
+                                }
+                                
+                                const newReader = response.body.getReader();
+                                readerAtual = newReader;
+                                const newDecoder = new TextDecoder();
+                                buffer = ''; // Resetar buffer
+                                
+                                // Continuar leitura com nova conexão
+                                lerStream(tentativas + 1);
+                            })
+                            .catch(retryError => {
+                                if (tentativas + 1 < maxTentativas) {
+                                    lerStream(tentativas + 1);
+                                } else {
+                                    adicionarLinhaTerminal(`\n❌ Erro ao executar comando após ${maxTentativas} tentativas: ${retryError.message}`);
+                                    finalizarExecucao(false);
+                                }
+                            });
+                        }, delayRetry);
+                    } else {
+                        adicionarLinhaTerminal(`\n❌ Erro ao executar comando: ${error.message}`);
+                        finalizarExecucao(false);
+                    }
                 });
             }
             
@@ -682,13 +1013,9 @@
                             break;
                             
                         case 'sucesso':
-                            atualizarETA(`Comando ${comandoAtual + 1} concluído`, ((comandoAtual + 1) / totalComandos) * 100, `Comando ${comandoAtual + 1} de ${totalComandos} concluído`);
+                            const comandoRelativo = comandoAtual - 1;
+                            atualizarETA(`Comando ${comandoRelativo + 1} concluído`, ((comandoRelativo + 1) / totalComandos) * 100, `Comando ${comandoRelativo + 1} de ${totalComandos} concluído`);
                             adicionarLinhaTerminal(`\n✅ ${data.mensagem || 'Comando executado com sucesso!'}`);
-                            
-                            // Se foi o primeiro comando (-spa), fechar modal do robô
-                            if (comandoAtual === 0 && modalRoboAberto) {
-                                fecharModalRobo();
-                            }
                             
                             // Executar próximo comando
                             comandoAtual++;
@@ -699,10 +1026,6 @@
                             
                         case 'erro':
                             adicionarLinhaTerminal(`\n❌ Erro: ${data.mensagem}`);
-                            // Se foi o primeiro comando (-spa), fechar modal do robô mesmo em erro
-                            if (comandoAtual === 0 && modalRoboAberto) {
-                                fecharModalRobo();
-                            }
                             finalizarExecucao(false);
                             break;
                     }
@@ -772,9 +1095,9 @@
         isExecutando = false;
         readerAtual = null;
         
-        // Resetar valores para os padrões originais
+        // Resetar valores
         comandoAtual = 0;
-        totalComandos = 4; // -spa -sia -ssr -snt
+        totalComandos = 3; // -sia -ssr -snt (para iniciar solicitações)
         
         atualizarBotoes();
         
@@ -838,10 +1161,15 @@
      * Atualiza o estado dos botões
      */
     function atualizarBotoes() {
+        const btnRevisarAIH = document.getElementById('btn-revisar-aih-internacoes');
         const btnIniciar = document.getElementById('btn-iniciar-processo-internacoes');
         const btnInterromper = document.getElementById('btn-interromper-processo-internacoes');
         
         if (isExecutando) {
+            if (btnRevisarAIH) {
+                btnRevisarAIH.disabled = true;
+                btnRevisarAIH.style.display = 'none';
+            }
             if (btnIniciar) {
                 btnIniciar.disabled = true;
                 btnIniciar.style.display = 'none';
@@ -851,6 +1179,10 @@
                 btnInterromper.style.display = 'inline-block';
             }
         } else {
+            if (btnRevisarAIH) {
+                btnRevisarAIH.disabled = false;
+                btnRevisarAIH.style.display = 'inline-block';
+            }
             if (btnIniciar) {
                 btnIniciar.disabled = false;
                 btnIniciar.style.display = 'inline-block';

@@ -176,7 +176,10 @@ function executarProximoComando() {
         const decoder = new TextDecoder();
         let buffer = '';
         
-        function lerStream() {
+        function lerStream(tentativas = 0) {
+            const maxTentativas = 5;
+            const delayRetry = 2000; // 2 segundos
+            
             reader.read().then(({ done, value }) => {
                 if (done) {
                     // Processar buffer restante
@@ -201,11 +204,51 @@ function executarProximoComando() {
                     }
                 });
                 
-                lerStream();
+                lerStream(0); // Resetar tentativas em caso de sucesso
             }).catch(error => {
                 console.error('Erro ao ler stream:', error);
-                adicionarLinhaTerminal(`\n❌ Erro ao executar comando: ${error.message}`);
-                finalizarExecucao(false);
+                const errorMsg = error.message.toLowerCase();
+                
+                // Verificar se é network error e ainda há tentativas
+                if ((errorMsg.includes('network error') || errorMsg.includes('failed to fetch') || errorMsg.includes('networkerror')) && tentativas < maxTentativas) {
+                    adicionarLinhaTerminal(`\n⚠️ Erro de rede detectado. Tentando reconectar... (${tentativas + 1}/${maxTentativas})`);
+                    
+                    // Tentar reconectar após delay
+                    setTimeout(() => {
+                        // Recriar a requisição para retomar o processo
+                        fetch('/api/solicitar-tcs/executar', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ comando_index: comandoAtual, session_id: sessionId })
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error('Erro na resposta do servidor');
+                            }
+                            
+                            const newReader = response.body.getReader();
+                            readerAtual = newReader;
+                            const newDecoder = new TextDecoder();
+                            buffer = ''; // Resetar buffer
+                            
+                            // Continuar leitura com nova conexão
+                            lerStream(tentativas + 1);
+                        })
+                        .catch(retryError => {
+                            if (tentativas + 1 < maxTentativas) {
+                                lerStream(tentativas + 1);
+                            } else {
+                                adicionarLinhaTerminal(`\n❌ Erro ao executar comando após ${maxTentativas} tentativas: ${retryError.message}`);
+                                finalizarExecucao(false);
+                            }
+                        });
+                    }, delayRetry);
+                } else {
+                    adicionarLinhaTerminal(`\n❌ Erro ao executar comando: ${error.message}`);
+                    finalizarExecucao(false);
+                }
             });
         }
         

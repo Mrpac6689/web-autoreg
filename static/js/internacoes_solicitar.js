@@ -1026,7 +1026,10 @@ function buscarPendentes() {
         const decoder = new TextDecoder();
         let buffer = '';
         
-        function lerStream() {
+        function lerStream(tentativas = 0) {
+            const maxTentativas = 5;
+            const delayRetry = 2000; // 2 segundos
+            
             reader.read().then(({ done, value }) => {
                 if (done) {
                     if (buffer.trim()) {
@@ -1050,11 +1053,51 @@ function buscarPendentes() {
                     }
                 });
                 
-                lerStream();
+                lerStream(0); // Resetar tentativas em caso de sucesso
             }).catch(error => {
                 console.error('Erro ao ler stream:', error);
-                adicionarLinhaTerminalInternacoes(`\n❌ Erro ao executar comando: ${error.message}`);
-                finalizarBuscaInternacoes(false);
+                const errorMsg = error.message.toLowerCase();
+                
+                // Verificar se é network error e ainda há tentativas
+                if ((errorMsg.includes('network error') || errorMsg.includes('failed to fetch') || errorMsg.includes('networkerror')) && tentativas < maxTentativas) {
+                    adicionarLinhaTerminalInternacoes(`\n⚠️ Erro de rede detectado. Tentando reconectar... (${tentativas + 1}/${maxTentativas})`);
+                    
+                    // Tentar reconectar após delay
+                    setTimeout(() => {
+                        // Recriar a requisição para retomar o processo
+                        fetch('/api/internacoes-solicitar/buscar-pendentes', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ session_id: sessionIdInternacoes })
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error('Erro na resposta do servidor');
+                            }
+                            
+                            const newReader = response.body.getReader();
+                            readerAtualInternacoes = newReader;
+                            const newDecoder = new TextDecoder();
+                            buffer = ''; // Resetar buffer
+                            
+                            // Continuar leitura com nova conexão
+                            lerStream(tentativas + 1);
+                        })
+                        .catch(retryError => {
+                            if (tentativas + 1 < maxTentativas) {
+                                lerStream(tentativas + 1);
+                            } else {
+                                adicionarLinhaTerminalInternacoes(`\n❌ Erro ao executar comando após ${maxTentativas} tentativas: ${retryError.message}`);
+                                finalizarBuscaInternacoes(false);
+                            }
+                        });
+                    }, delayRetry);
+                } else {
+                    adicionarLinhaTerminalInternacoes(`\n❌ Erro ao executar comando: ${error.message}`);
+                    finalizarBuscaInternacoes(false);
+                }
             });
         }
         

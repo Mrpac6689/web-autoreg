@@ -1,0 +1,40 @@
+<!-- Modal para Reconectar Processos -->
+<div class="glass-modal" id="modal-reconectar-processos">
+    <div class="glass-modal-content modal-large">
+        <div class="modal-header">
+            <h2>Reconectar a Processos em Execução</h2>
+            <button class="glass-modal-close" id="close-modal-reconectar-processos">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div style="margin-bottom: 20px;">
+                <button type="button" class="glass-button-action" id="btn-investigar-processos">
+                    <i class="fas fa-search"></i> Investigar Processos em Execução
+                </button>
+            </div>
+            
+            <!-- Lista de processos encontrados -->
+            <div id="processos-lista" style="display: none; margin-bottom: 20px;">
+                <h3 style="margin-bottom: 15px; color: var(--text-light);">Processos Encontrados:</h3>
+                <div id="processos-container"></div>
+            </div>
+            
+            <!-- Terminal para mostrar execução -->
+            <div class="terminal-container" id="terminal-container-reconectar" style="display: none; margin-top: 20px;">
+                <div class="terminal-header">
+                    <i class="fas fa-terminal"></i>
+                    <span>Saída do Terminal</span>
+                </div>
+                <div class="terminal-output" id="terminal-output-reconectar">
+                    <div class="terminal-line">Aguardando conexão...</div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="glass-button-action" id="btn-fechar-reconectar-processos">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>

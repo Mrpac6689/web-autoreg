@@ -419,6 +419,33 @@ body::before {
     overflow-y: auto;
 }
 
+/* Modal específico para internacoes-solicitar - mais largo para botões ficarem na mesma linha */
+#modal-internacoes-solicitar .glass-modal-content {
+    max-width: 98%;
+    width: 98%;
+    max-height: 98vh;
+    min-width: 1400px;
+}
+
+#modal-internacoes-solicitar .glass-modal-content .modal-body {
+    max-height: calc(98vh - 180px);
+    overflow-y: auto;
+}
+
+#modal-internacoes-solicitar .modal-footer {
+    flex-wrap: nowrap;
+    gap: 10px;
+    padding: 15px 20px;
+    overflow-x: auto;
+}
+
+#modal-internacoes-solicitar .modal-footer .glass-button-action {
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    padding: 8px 16px;
+}
+
 .modal-header {
     padding: 20px 30px;
     border-bottom: 1px solid var(--glass-border);
@@ -1589,7 +1616,7 @@ body::before {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 99999 !important;
+    z-index: 999999 !important; /* Muito alto para ficar acima de tudo */
     pointer-events: auto !important;
     isolation: isolate;
 }
@@ -1614,6 +1641,14 @@ body::before {
 .floating-action-button:hover i {
     opacity: 1;
     transform: scale(1.1);
+}
+
+/* Botão flutuante de reconectar processos - posicionado à esquerda do botão do olho */
+#btn-reconectar-processos {
+    right: 100px !important;
+    bottom: 30px !important;
+    z-index: 9999999 !important; /* Extremamente alto para ficar acima de tudo, incluindo modais e overlays */
+    position: fixed !important;
 }
 
 /* Container para botões flutuantes redondos no modal do robô */

@@ -102,9 +102,36 @@ processos_ativos = {}
 processos_stdin = {}
 # Armazenar queues para comunicação entre threads de leitura de stdout
 processos_queues = {}
+# Armazenar informações sobre os processos (comando, tipo, etc)
+processos_info = {}
 import threading
 import queue
 processos_lock = threading.Lock()
+
+
+def limpar_processos_finalizados():
+    """Remove processos que realmente terminaram do dicionário"""
+    with processos_lock:
+        processos_para_remover = []
+        for session_id, processo in processos_ativos.items():
+            try:
+                if processo.poll() is not None:
+                    # Processo realmente terminou
+                    processos_para_remover.append(session_id)
+            except (ProcessLookupError, AttributeError):
+                # Processo não existe mais
+                processos_para_remover.append(session_id)
+        
+        for session_id in processos_para_remover:
+            print(f"[DEBUG] Removendo processo finalizado: {session_id}")
+            if session_id in processos_ativos:
+                del processos_ativos[session_id]
+            if session_id in processos_stdin:
+                del processos_stdin[session_id]
+            if session_id in processos_queues:
+                del processos_queues[session_id]
+            if session_id in processos_info:
+                del processos_info[session_id]
 
 
 def verificar_container_docker():
@@ -486,6 +513,10 @@ def executar_solicitacao_tcs():
             # Armazenar processo para permitir interrupção
             with processos_lock:
                 processos_ativos[session_id] = processo
+                processos_info[session_id] = {
+                    'comando': ' '.join(comando),
+                    'tipo': 'solicitar-tcs'
+                }
             
             # Ler saída caractere por caractere para streaming verdadeiro
             # Isso permite ver a saída mesmo antes de uma linha completa
@@ -2099,6 +2130,10 @@ def executar_buscar_pendentes():
             # Armazenar processo para permitir interrupção
             with processos_lock:
                 processos_ativos[session_id] = processo
+                processos_info[session_id] = {
+                    'comando': ' '.join(comando),
+                    'tipo': 'solicitar-tcs'
+                }
             
             # Ler saída caractere por caractere para streaming verdadeiro
             buffer_linha = ''
@@ -2122,10 +2157,12 @@ def executar_buscar_pendentes():
             # Aguardar término do processo
             processo.wait()
             
-            # Remover processo da lista de ativos
+            # Remover processo da lista de ativos apenas após realmente terminar
             with processos_lock:
                 if session_id in processos_ativos:
                     del processos_ativos[session_id]
+                    if session_id in processos_info:
+                        del processos_info[session_id]
             
             # Enviar resultado
             if processo.returncode == 0:
@@ -2274,11 +2311,19 @@ def executar_solicitar_internacoes():
             # Armazenar processo e stdin se necessário
             with processos_lock:
                 processos_ativos[session_id] = processo
+                processos_info[session_id] = {
+                    'comando': ' '.join(comando),
+                    'tipo': 'internacoes-solicitar',
+                    'comando_index': comando_index
+                }
                 if precisa_stdin:
                     processos_stdin[session_id] = processo.stdin
             
             # Ler saída caractere por caractere usando thread para evitar bloqueio
             output_queue = queue.Queue()
+            # Armazenar queue para permitir reconexão
+            with processos_lock:
+                processos_queues[session_id] = output_queue
             leitura_ativa = threading.Event()
             leitura_ativa.set()
             
@@ -2410,13 +2455,38 @@ def executar_solicitar_internacoes():
                 except Exception as e:
                     # Log erro mas não interromper execução
                     print(f"Erro ao remover pause.flag: {e}")
+                
+                # Após finalização do comando -spa, contar registros e gravar no relatório
+                if processo.returncode == 0:
+                    try:
+                        csv_path = Path(WORKDIR) / 'solicita_inf_aih.csv'
+                        registros = 0
+                        
+                        if csv_path.exists():
+                            with open(csv_path, 'r', encoding='utf-8') as f:
+                                reader = csv.reader(f)
+                                linhas = list(reader)
+                                # Contar linhas com informações (exceto a primeira que é cabeçalho)
+                                if len(linhas) > 1:
+                                    # Contar apenas linhas que não estão vazias ou têm pelo menos um campo preenchido
+                                    registros = sum(1 for linha in linhas[1:] if linha and any(campo.strip() for campo in linha))
+                        
+                        # Obter usuário logado
+                        usuario = current_user.username if current_user.is_authenticated else 'Desconhecido'
+                        
+                        # Registrar no relatório
+                        registrar_relatorio('Solicitar Internações', usuario, registros)
+                        
+                        yield f"data: {json.dumps({'tipo': 'info', 'mensagem': f'Relatório registrado: {registros} registros encontrados em solicita_inf_aih.csv'})}\n\n"
+                    except Exception as e:
+                        # Log erro mas não interromper execução
+                        print(f"Erro ao contar registros e gravar relatório: {e}")
+                        yield f"data: {json.dumps({'tipo': 'aviso', 'mensagem': f'Aviso: Erro ao registrar relatório: {str(e)}'})}\n\n"
             
-            # Remover processo da lista de ativos
-            with processos_lock:
-                if session_id in processos_ativos:
-                    del processos_ativos[session_id]
-                if session_id in processos_stdin:
-                    del processos_stdin[session_id]
+            # NÃO remover processo da lista de ativos aqui
+            # O processo pode ainda estar rodando mesmo que o streaming tenha terminado
+            # Ele será removido apenas quando realmente terminar (poll() != None)
+            print(f"[DEBUG] Streaming terminou para executar {session_id}, mas processo pode ainda estar rodando")
             
             # Calcular progresso
             progresso = int(((comando_index + 1) / len(comandos)) * 100)
@@ -2439,6 +2509,277 @@ def executar_solicitar_internacoes():
     response.headers['Cache-Control'] = 'no-cache'
     response.headers['X-Accel-Buffering'] = 'no'
     return response
+
+
+@app.route('/api/internacoes-solicitar/revisar-aih', methods=['POST'])
+@login_required
+def executar_revisar_aih():
+    """Executa apenas o comando -spa e grava a produção no relatório"""
+    data = request.json or {}
+    session_id = data.get('session_id', str(threading.current_thread().ident))
+    
+    def gerar():
+        nonlocal session_id
+        try:
+            # Comando -spa
+            comando = ['-spa']
+            
+            # Construir comando completo
+            if 'python' in PYTHONPATH.lower():
+                comando_original = [PYTHONPATH, '-u', AUTOREGPATH] + comando
+            else:
+                comando_original = [PYTHONPATH, AUTOREGPATH] + comando
+            
+            # Verificar container antes de executar
+            if USE_DOCKER and DOCKER_CONTAINER:
+                container_ok, mensagem = verificar_container_docker()
+                if not container_ok:
+                    yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': f'Container Docker não acessível: {mensagem}'})}\n\n"
+                    return
+            
+            # Construir comando com Docker se necessário
+            comando_exec = construir_comando_docker(comando_original)
+            
+            # Criar flag de pausa antes de executar
+            try:
+                pause_flag_path = Path(WORKDIR) / 'pause.flag'
+                pause_flag_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(pause_flag_path, 'w', encoding='utf-8') as f:
+                    f.write('pausar')
+                yield f"data: {json.dumps({'tipo': 'output', 'linha': 'Flag pause.flag criada - processo será pausado para interação'})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': f'Erro ao criar flag de pausa: {str(e)}'})}\n\n"
+                return
+            
+            # Enviar início do comando
+            yield f"data: {json.dumps({'tipo': 'inicio', 'comando': ' '.join(comando_exec)})}\n\n"
+            
+            # Executar comando com streaming
+            env = os.environ.copy()
+            env['PYTHONUNBUFFERED'] = '1'
+            
+            cwd_exec = None if (USE_DOCKER and DOCKER_CONTAINER) else WORKDIR
+            
+            # Precisamos de stdin para interação
+            processo = subprocess.Popen(
+                comando_exec,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE,
+                text=True,
+                bufsize=0,
+                universal_newlines=True,
+                cwd=cwd_exec,
+                env=env
+            )
+            
+            # Armazenar processo e stdin
+            with processos_lock:
+                processos_ativos[session_id] = processo
+                processos_info[session_id] = {
+                    'comando': ' '.join(comando_exec),
+                    'tipo': 'revisar-aih'
+                }
+                processos_stdin[session_id] = processo.stdin
+            
+            # Ler saída caractere por caractere usando thread para evitar bloqueio
+            output_queue = queue.Queue()
+            # Armazenar queue para permitir reconexão
+            with processos_lock:
+                processos_queues[session_id] = output_queue
+            leitura_ativa = threading.Event()
+            leitura_ativa.set()
+            
+            def ler_stdout_thread():
+                """Thread para ler stdout sem bloquear o processo principal"""
+                buffer_local = ''
+                try:
+                    while leitura_ativa.is_set():
+                        char = processo.stdout.read(1)
+                        if not char:
+                            if processo.poll() is not None:
+                                if buffer_local.strip():
+                                    output_queue.put(('linha', buffer_local.rstrip()))
+                                output_queue.put(('fim', None))
+                                break
+                            time.sleep(0.1)
+                            continue
+                        
+                        buffer_local += char
+                        if char == '\n':
+                            linha_limpa = buffer_local.rstrip()
+                            if linha_limpa:
+                                output_queue.put(('linha', linha_limpa))
+                            buffer_local = ''
+                except Exception as e:
+                    output_queue.put(('erro', str(e)))
+            
+            # Iniciar thread de leitura
+            thread_leitura = threading.Thread(target=ler_stdout_thread, daemon=True)
+            thread_leitura.start()
+            
+            # Processar saída da queue
+            buffer_linha = ''
+            ultima_linha_aguardando = None
+            
+            while True:
+                try:
+                    # Aguardar item da queue com timeout
+                    try:
+                        tipo_item, dados = output_queue.get(timeout=0.5)
+                    except queue.Empty:
+                        # Timeout - verificar se processo ainda está rodando
+                        if processo.poll() is not None:
+                            if buffer_linha.strip():
+                                yield f"data: {json.dumps({'tipo': 'output', 'linha': buffer_linha.rstrip()})}\n\n"
+                            break
+                        continue
+                    
+                    if tipo_item == 'fim':
+                        break
+                    elif tipo_item == 'erro':
+                        yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': dados})}\n\n"
+                        break
+                    elif tipo_item == 'linha':
+                        linha_limpa = dados
+                        yield f"data: {json.dumps({'tipo': 'output', 'linha': linha_limpa})}\n\n"
+                        
+                        # Detectar quando o processo está aguardando input do usuário
+                        linha_lower = linha_limpa.lower().strip()
+                        linha_sem_espacos = linha_limpa.strip()
+                        
+                        padrao_detectado = False
+                        
+                        # Padrão 1: "👉 Digite o comando (s/p):"
+                        if '👉' in linha_sem_espacos and 'digite' in linha_lower and ('comando' in linha_lower or 's/p' in linha_lower):
+                            padrao_detectado = True
+                        
+                        # Padrão 2: "Aguardando interação do usuário"
+                        elif 'aguardando interação' in linha_lower and 'usuário' in linha_lower:
+                            padrao_detectado = True
+                        
+                        # Padrão 3: "Digite 's' e pressione Enter" ou "Digite 'p' e pressione Enter"
+                        elif ('digite' in linha_lower and 'pressione enter' in linha_lower) and \
+                             (("'s'" in linha_lower or "'p'" in linha_lower) or ('s' in linha_lower and 'p' in linha_lower)):
+                            padrao_detectado = True
+                        
+                        if padrao_detectado:
+                            if linha_sem_espacos != ultima_linha_aguardando:
+                                ultima_linha_aguardando = linha_sem_espacos
+                                time.sleep(0.3)
+                                yield f"data: {json.dumps({'tipo': 'aguardando_input', 'mensagem': 'Aguardando interação do usuário', 'linha': linha_limpa})}\n\n"
+                                
+                                # Aguardar até que o usuário envie um comando e o processo produza nova saída
+                                timeout_aguardando = 0
+                                sem_dados_count = 0
+                                while timeout_aguardando < 300:  # Timeout de 5 minutos
+                                    if processo.poll() is not None:
+                                        break
+                                    # Verificar se há nova saída disponível
+                                    try:
+                                        tipo_item, dados = output_queue.get(timeout=1.0)
+                                        sem_dados_count = 0
+                                        if tipo_item == 'linha':
+                                            # Nova saída após enviar comando - processar
+                                            yield f"data: {json.dumps({'tipo': 'output', 'linha': dados})}\n\n"
+                                            # Continuar processamento normal
+                                            break
+                                        elif tipo_item == 'fim':
+                                            break
+                                    except queue.Empty:
+                                        sem_dados_count += 1
+                                        timeout_aguardando += 1.0
+                                        # Se não há dados por 2 segundos após detectar aguardando input,
+                                        # assumimos que está realmente aguardando
+                                        if sem_dados_count >= 2:
+                                            # Continuar aguardando, mas não bloquear
+                                            continue
+                    
+                except Exception as e:
+                    yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': str(e)})}\n\n"
+                    break
+            
+            # Parar thread de leitura
+            leitura_ativa.clear()
+            thread_leitura.join(timeout=1)
+            
+            # Aguardar término do processo
+            processo.wait()
+            
+            # Remover flag de pausa
+            try:
+                pause_flag_path = Path(WORKDIR) / 'pause.flag'
+                if pause_flag_path.exists():
+                    pause_flag_path.unlink()
+            except Exception as e:
+                print(f"Erro ao remover pause.flag: {e}")
+            
+            # NÃO remover processo da lista de ativos aqui
+            # O processo pode ainda estar rodando mesmo que o streaming tenha terminado
+            # Ele será removido apenas quando realmente terminar (poll() != None)
+            print(f"[DEBUG] Streaming terminou para revisar-aih {session_id}, mas processo pode ainda estar rodando")
+            
+            # Enviar resultado
+            if processo.returncode == 0:
+                yield f"data: {json.dumps({'tipo': 'sucesso', 'mensagem': 'Revisão de solicitações AIH concluída com sucesso!'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'tipo': 'erro', 'codigo': processo.returncode, 'mensagem': 'Comando retornou código de erro'})}\n\n"
+                
+        except Exception as e:
+            with processos_lock:
+                if session_id in processos_ativos:
+                    del processos_ativos[session_id]
+                if session_id in processos_stdin:
+                    del processos_stdin[session_id]
+            yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': str(e)})}\n\n"
+    
+    response = Response(gerar(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+
+
+@app.route('/api/internacoes-solicitar/gravar-producao', methods=['POST'])
+@login_required
+def gravar_producao_internacoes():
+    """Conta os registros do CSV e grava no relatório"""
+    try:
+        csv_path = Path(WORKDIR) / 'solicita_inf_aih.csv'
+        registros = 0
+        
+        if csv_path.exists():
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                linhas = list(reader)
+                # Contar linhas com informações (exceto a primeira que é cabeçalho)
+                if len(linhas) > 1:
+                    # Contar apenas linhas que não estão vazias ou têm pelo menos um campo preenchido
+                    registros = sum(1 for linha in linhas[1:] if linha and any(campo.strip() for campo in linha))
+        
+        # Obter usuário logado
+        usuario = current_user.username if current_user.is_authenticated else 'Desconhecido'
+        
+        # Registrar no relatório
+        sucesso = registrar_relatorio('Solicitar Internações', usuario, registros)
+        
+        if sucesso:
+            return jsonify({
+                'success': True,
+                'registros': registros,
+                'mensagem': f'Produção registrada: {registros} registros encontrados em solicita_inf_aih.csv'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Erro ao registrar no relatório'
+            }), 500
+            
+    except Exception as e:
+        print(f"Erro ao gravar produção: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao gravar produção: {str(e)}'
+        }), 500
 
 
 @app.route('/api/internacoes/grava', methods=['GET', 'OPTIONS'])
@@ -2764,6 +3105,320 @@ def enviar_comando_terminal():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@app.route('/api/processos/listar', methods=['GET'])
+@login_required
+def listar_processos_ativos():
+    """Lista todos os processos ativos no sistema"""
+    try:
+        # Limpar processos finalizados antes de listar
+        limpar_processos_finalizados()
+        
+        processos_info_list = []
+        
+        with processos_lock:
+            print(f"[DEBUG] Total de processos no dicionário: {len(processos_ativos)}")
+            print(f"[DEBUG] Session IDs: {list(processos_ativos.keys())}")
+            
+            for session_id, processo in processos_ativos.items():
+                try:
+                    # Obter informações do processo
+                    info = processos_info.get(session_id, {})
+                    comando = info.get('comando', 'Desconhecido')
+                    tipo = info.get('tipo', 'desconhecido')
+                    
+                    # Verificar status do processo
+                    poll_result = processo.poll()
+                    print(f"[DEBUG] Processo {session_id} (PID: {processo.pid}): poll() = {poll_result}")
+                    
+                    # Verificar se o processo ainda está rodando
+                    if poll_result is None:
+                        # Processo ainda está rodando
+                        print(f"[DEBUG] Processo {session_id} está ATIVO")
+                        processos_info_list.append({
+                            'session_id': session_id,
+                            'pid': processo.pid,
+                            'status': 'ativo',
+                            'comando': comando,
+                            'tipo': tipo
+                        })
+                    else:
+                        # Processo terminou, mas ainda está no dicionário
+                        print(f"[DEBUG] Processo {session_id} está FINALIZADO (returncode: {poll_result})")
+                        processos_info_list.append({
+                            'session_id': session_id,
+                            'pid': processo.pid,
+                            'status': 'finalizado',
+                            'comando': comando,
+                            'tipo': tipo
+                        })
+                except (ProcessLookupError, AttributeError) as e:
+                    # Processo não existe mais
+                    print(f"[DEBUG] Erro ao processar processo {session_id}: {e}")
+                    continue
+        
+        print(f"[DEBUG] Retornando {len(processos_info_list)} processo(s)")
+        return jsonify({
+            'success': True,
+            'processos': processos_info_list,
+            'total': len(processos_info_list),
+            'debug': {
+                'total_no_dict': len(processos_ativos),
+                'session_ids': list(processos_ativos.keys())
+            }
+        })
+    except Exception as e:
+        print(f"[DEBUG] Erro ao listar processos: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao listar processos: {str(e)}'
+        }), 500
+
+
+@app.route('/api/processos/reconectar', methods=['POST'])
+@login_required
+def reconectar_processo():
+    """Reconecta ao streaming de um processo específico"""
+    data = request.json or {}
+    session_id = data.get('session_id')
+    
+    if not session_id:
+        return jsonify({
+            'success': False,
+            'error': 'session_id é obrigatório'
+        }), 400
+    
+    def gerar():
+        nonlocal session_id
+        try:
+            with processos_lock:
+                if session_id not in processos_ativos:
+                    yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': 'Processo não encontrado ou já finalizado'})}\n\n"
+                    return
+                
+                processo = processos_ativos[session_id]
+                
+                # Verificar se o processo ainda está rodando
+                if processo.poll() is not None:
+                    yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': 'Processo já finalizado'})}\n\n"
+                    return
+            
+            # Enviar mensagem de reconexão
+            info = processos_info.get(session_id, {})
+            comando_info = info.get('comando', 'Desconhecido')
+            yield f"data: {json.dumps({'tipo': 'info', 'mensagem': f'Reconectado ao processo {session_id} (PID: {processo.pid})'})}\n\n"
+            yield f"data: {json.dumps({'tipo': 'info', 'mensagem': f'Comando: {comando_info}'})}\n\n"
+            
+            # Verificar se o processo ainda tem stdout disponível
+            # Para processos Docker, o stdout pode não estar mais disponível se o processo docker exec terminou
+            # mas o processo dentro do container ainda está rodando
+            stdout_disponivel = True
+            try:
+                # Tentar verificar se stdout está disponível
+                if processo.stdout is None:
+                    stdout_disponivel = False
+                elif hasattr(processo.stdout, 'closed') and processo.stdout.closed:
+                    stdout_disponivel = False
+                elif processo.poll() is not None:
+                    # Processo terminou
+                    stdout_disponivel = False
+            except Exception as e:
+                print(f"[DEBUG] Erro ao verificar stdout: {e}")
+                stdout_disponivel = False
+            
+            if not stdout_disponivel:
+                # Para processos Docker, tentar verificar se o processo ainda está rodando dentro do container
+                if USE_DOCKER and DOCKER_CONTAINER and 'docker exec' in comando_info:
+                    yield f"data: {json.dumps({'tipo': 'aviso', 'mensagem': 'Stdout do comando docker exec não está mais disponível. Tentando verificar se o processo ainda está rodando dentro do container...'})}\n\n"
+                    
+                    # Tentar verificar processos Python rodando dentro do container
+                    try:
+                        # Extrair o comando Python do comando Docker
+                        # Ex: "docker exec autoreg /usr/bin/python3 -u /home/kasm-user/.autoreg/autoreg.py -sia"
+                        # Queremos: "/usr/bin/python3 -u /home/kasm-user/.autoreg/autoreg.py -sia"
+                        partes_comando = comando_info.split()
+                        if 'docker' in partes_comando and 'exec' in partes_comando:
+                            # Encontrar o índice após o nome do container
+                            try:
+                                idx_container = partes_comando.index(DOCKER_CONTAINER)
+                                comando_dentro_container = partes_comando[idx_container + 1:]
+                                
+                                # Verificar se há processo Python rodando com esse comando
+                                comando_ps = ['docker', 'exec', DOCKER_CONTAINER, 'ps', 'aux']
+                                resultado_ps = subprocess.run(
+                                    comando_ps,
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=5
+                                )
+                                
+                                if resultado_ps.returncode == 0:
+                                    # Procurar por processos Python que correspondem ao comando
+                                    linhas_ps = resultado_ps.stdout.split('\n')
+                                    processos_encontrados = []
+                                    for linha in linhas_ps:
+                                        if 'python' in linha.lower() and any(arg in linha for arg in comando_dentro_container if arg.startswith('-')):
+                                            processos_encontrados.append(linha)
+                                    
+                                    if processos_encontrados:
+                                        yield f"data: {json.dumps({'tipo': 'info', 'mensagem': f'Processo ainda está rodando dentro do container. Encontrados {len(processos_encontrados)} processo(s) correspondente(s).'})}\n\n"
+                                        for proc in processos_encontrados[:3]:  # Mostrar até 3
+                                            yield f"data: {json.dumps({'tipo': 'output', 'linha': f'[Container] {proc[:100]}...'})}\n\n"
+                                        
+                                        yield f"data: {json.dumps({'tipo': 'aviso', 'mensagem': 'Não é possível reconectar ao stdout do processo Docker após o comando docker exec terminar. O processo continua rodando dentro do container, mas o stdout não está mais acessível.'})}\n\n"
+                                        return
+                                    else:
+                                        yield f"data: {json.dumps({'tipo': 'info', 'mensagem': 'Nenhum processo correspondente encontrado dentro do container. O processo pode ter terminado.'})}\n\n"
+                                else:
+                                    yield f"data: {json.dumps({'tipo': 'aviso', 'mensagem': f'Não foi possível verificar processos dentro do container: {resultado_ps.stderr}'})}\n\n"
+                            except (ValueError, IndexError):
+                                yield f"data: {json.dumps({'tipo': 'aviso', 'mensagem': 'Não foi possível extrair informações do comando Docker'})}\n\n"
+                    except Exception as e:
+                        yield f"data: {json.dumps({'tipo': 'aviso', 'mensagem': f'Erro ao verificar container: {str(e)}'})}\n\n"
+                
+                yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': 'Stdout do processo não está mais disponível. O processo pode ter terminado ou o stdout foi fechado.'})}\n\n"
+                return
+            
+            # Para reconexão, tentar usar queue compartilhada se existir
+            # Se não existir e stdout estiver disponível, criar uma nova thread de leitura
+            output_queue = None
+            with processos_lock:
+                if session_id in processos_queues:
+                    output_queue = processos_queues[session_id]
+                    yield f"data: {json.dumps({'tipo': 'info', 'mensagem': 'Usando queue compartilhada existente - pode conter dados anteriores'})}\n\n"
+                elif stdout_disponivel:
+                    # Criar nova queue e thread de leitura apenas se stdout estiver disponível
+                    output_queue = queue.Queue()
+                    processos_queues[session_id] = output_queue
+                    yield f"data: {json.dumps({'tipo': 'info', 'mensagem': 'Criando nova thread de leitura do stdout'})}\n\n"
+                    
+                    def ler_stdout_thread():
+                        """Thread para ler stdout sem bloquear"""
+                        buffer_local = ''
+                        try:
+                            while True:
+                                try:
+                                    char = processo.stdout.read(1)
+                                    if not char:
+                                        if processo.poll() is not None:
+                                            if buffer_local.strip():
+                                                output_queue.put(('linha', buffer_local.rstrip()))
+                                            output_queue.put(('fim', None))
+                                            break
+                                        time.sleep(0.1)
+                                        continue
+                                    
+                                    buffer_local += char
+                                    if char == '\n':
+                                        linha_limpa = buffer_local.rstrip()
+                                        if linha_limpa:
+                                            output_queue.put(('linha', linha_limpa))
+                                        buffer_local = ''
+                                except (ValueError, OSError, AttributeError) as e:
+                                    # Stdout pode ter sido fechado ou não estar mais disponível
+                                    if buffer_local.strip():
+                                        output_queue.put(('linha', buffer_local.rstrip()))
+                                    output_queue.put(('aviso', f'Stdout não está mais disponível: {str(e)}. Processo pode ainda estar rodando dentro do Docker.'))
+                                    # Não quebrar, continuar tentando verificar se processo terminou
+                                    time.sleep(1)
+                                    if processo.poll() is not None:
+                                        output_queue.put(('fim', None))
+                                        break
+                        except Exception as e:
+                            output_queue.put(('erro', str(e)))
+                    
+                    thread_leitura = threading.Thread(target=ler_stdout_thread, daemon=True)
+                    thread_leitura.start()
+            
+            if output_queue is None:
+                # Stdout não disponível e não há queue - não podemos reconectar
+                yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': 'Não é possível reconectar: stdout não está disponível e não há queue compartilhada'})}\n\n"
+                return
+            
+            # Processar saída da queue (output_queue foi definido acima)
+            timeout_count = 0
+            max_timeouts = 20  # 10 segundos sem dados (20 * 0.5s)
+            
+            while True:
+                try:
+                    tipo_item, dados = output_queue.get(timeout=0.5)
+                    timeout_count = 0  # Resetar contador quando receber dados
+                    
+                    if tipo_item == 'fim':
+                        yield f"data: {json.dumps({'tipo': 'info', 'mensagem': 'Processo finalizado'})}\n\n"
+                        break
+                    elif tipo_item == 'erro':
+                        yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': dados})}\n\n"
+                        # Se for erro de stdout fechado mas processo ainda rodando, informar mas não quebrar
+                        if 'stdout' in dados.lower() and processo.poll() is None:
+                            yield f"data: {json.dumps({'tipo': 'aviso', 'mensagem': 'Stdout não disponível, mas processo ainda está rodando. Para processos Docker, isso é normal após o comando docker exec terminar.'})}\n\n"
+                            # Continuar tentando verificar se processo termina
+                            continue
+                        else:
+                            break
+                    elif tipo_item == 'aviso':
+                        yield f"data: {json.dumps({'tipo': 'aviso', 'mensagem': dados})}\n\n"
+                        # Continuar tentando verificar se processo termina
+                        continue
+                    elif tipo_item == 'linha':
+                        yield f"data: {json.dumps({'tipo': 'output', 'linha': dados})}\n\n"
+                    
+                    # Verificar se processo terminou
+                    if processo.poll() is not None:
+                        yield f"data: {json.dumps({'tipo': 'info', 'mensagem': 'Processo finalizado'})}\n\n"
+                        break
+                        
+                except queue.Empty:
+                    timeout_count += 1
+                    # Timeout - verificar se processo ainda está rodando
+                    if processo.poll() is not None:
+                        yield f"data: {json.dumps({'tipo': 'info', 'mensagem': 'Processo finalizado'})}\n\n"
+                        break
+                    
+                    # Se muitos timeouts e processo ainda rodando, pode ser que stdout não esteja mais disponível
+                    if timeout_count >= max_timeouts and processo.poll() is None:
+                        yield f"data: {json.dumps({'tipo': 'aviso', 'mensagem': 'Não há mais saída disponível do processo. O processo pode ainda estar rodando dentro do Docker, mas o stdout do comando docker exec não está mais acessível.'})}\n\n"
+                        
+                        # Para processos Docker, tentar verificar se ainda está rodando dentro do container
+                        if USE_DOCKER and DOCKER_CONTAINER and 'docker exec' in comando_info:
+                            try:
+                                partes_comando = comando_info.split()
+                                if 'docker' in partes_comando and 'exec' in partes_comando:
+                                    idx_container = partes_comando.index(DOCKER_CONTAINER)
+                                    comando_dentro_container = partes_comando[idx_container + 1:]
+                                    
+                                    comando_ps = ['docker', 'exec', DOCKER_CONTAINER, 'ps', 'aux']
+                                    resultado_ps = subprocess.run(
+                                        comando_ps,
+                                        capture_output=True,
+                                        text=True,
+                                        timeout=5
+                                    )
+                                    
+                                    if resultado_ps.returncode == 0:
+                                        linhas_ps = resultado_ps.stdout.split('\n')
+                                        processos_encontrados = [l for l in linhas_ps if 'python' in l.lower() and any(arg in l for arg in comando_dentro_container if arg.startswith('-'))]
+                                        
+                                        if processos_encontrados:
+                                            yield f"data: {json.dumps({'tipo': 'info', 'mensagem': f'Processo ainda está rodando dentro do container (encontrados {len(processos_encontrados)} processo(s))'})}\n\n"
+                            except Exception:
+                                pass  # Ignorar erros na verificação
+                        
+                        # Continuar tentando, mas informar o usuário
+                        timeout_count = 0  # Resetar para não ficar repetindo a mensagem
+                    
+                    continue
+                    
+        except Exception as e:
+            yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': str(e)})}\n\n"
+    
+    response = Response(gerar(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
 
 
 @app.route('/api/internacoes-solicitar/interromper-execucao', methods=['POST'])
