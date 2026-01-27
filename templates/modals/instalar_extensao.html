@@ -1,0 +1,62 @@
+<!-- Modal para Instalar Extensão -->
+<div class="glass-modal" id="modal-instalar-extensao" style="display: none;">
+    <div class="glass-modal-content modal-large">
+        <div class="modal-header">
+            <h2>Instalar Extensão Chrome</h2>
+            <button class="glass-modal-close" id="close-modal-instalar-extensao">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div id="instrucoes-crx" style="display: none;">
+                <h3>Instalação via Arquivo .crx</h3>
+                <ol>
+                    <li>Clique no botão "Baixar Extensão" abaixo para baixar o arquivo ZIP contendo <code>chrome-extension.crx</code></li>
+                    <li>Extraia o arquivo ZIP e localize o arquivo <code>chrome-extension.crx</code></li>
+                    <li>Abra o Chrome e vá para <code>chrome://extensions/</code></li>
+                    <li>Ative o "Modo do desenvolvedor" no canto superior direito</li>
+                    <li>Arraste e solte o arquivo <code>chrome-extension.crx</code> na página de extensões</li>
+                    <li>Confirme a instalação quando solicitado</li>
+                    <li>Após a instalação, clique no ícone da extensão na barra de ferramentas para configurar:
+                        <ul>
+                            <li><strong>Core do Autoreg</strong>: URL onde está rodando o KasmVNC com o core do Autoreg (ex: <code>https://cms.michelpaes.com.br</code>)</li>
+                            <li><strong>Frontend</strong>: URL da aplicação web Autoreg (ex: <code>https://autoreg.michelpaes.com.br</code> ou <code>http://localhost:5000</code>)</li>
+                        </ul>
+                    </li>
+                </ol>
+            </div>
+            
+            <div id="instrucoes-zip" style="display: none;">
+                <h3>Instalação via Pasta (Modo Desenvolvimento)</h3>
+                <ol>
+                    <li>Clique no botão "Baixar Extensão" abaixo para baixar o arquivo ZIP</li>
+                    <li>Extraia o arquivo ZIP em uma pasta de sua escolha</li>
+                    <li>Abra o Chrome e vá para <code>chrome://extensions/</code></li>
+                    <li>Ative o "Modo do desenvolvedor" no canto superior direito</li>
+                    <li>Clique em "Carregar sem compactação"</li>
+                    <li>Selecione a pasta extraída (pasta <code>chrome-extension</code>)</li>
+                    <li>A extensão será carregada e estará ativa</li>
+                    <li>Após a instalação, clique no ícone da extensão na barra de ferramentas para configurar:
+                        <ul>
+                            <li><strong>Core do Autoreg</strong>: URL onde está rodando o KasmVNC com o core do Autoreg (ex: <code>https://cms.michelpaes.com.br</code>)</li>
+                            <li><strong>Frontend</strong>: URL da aplicação web Autoreg (ex: <code>https://autoreg.michelpaes.com.br</code> ou <code>http://localhost:5000</code>)</li>
+                        </ul>
+                    </li>
+                </ol>
+            </div>
+            
+            <div class="alert alert-info" style="margin-top: 20px;">
+                <i class="fas fa-info-circle"></i>
+                <strong>Nota:</strong> A extensão adiciona botões flutuantes na página do KasmVNC para controlar o processo automatizado do Autoreg.
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="glass-button-action" id="btn-download-extensao">
+                <i class="fas fa-download"></i> Baixar Extensão
+            </button>
+            <button type="button" class="glass-button-action glass-button-danger" id="btn-fechar-modal-extensao">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>

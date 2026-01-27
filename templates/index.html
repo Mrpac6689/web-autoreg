@@ -29,6 +29,10 @@
                 Núcleo Interno de Regulação - NIR - HUERB. Sistema Automatizado de operações G-HOSP e SISREG.
             </div>
             <div class="top-bar-right">
+                <button class="top-bar-button" id="btn-instalar-extensao" aria-label="Instalar Extensão" title="Instalar Extensão Chrome">
+                    <i class="fas fa-puzzle-piece"></i>
+                    <span>Instalar Extensão</span>
+                </button>
                 <div class="top-bar-time" id="current-time">
                     Carregando...
                 </div>
@@ -189,6 +193,7 @@
     {% include 'modals/solicitar_internacoes.html' %}
     {% include 'modals/pendencias_internacoes.html' %}
     {% include 'modals/confirm_dialog.html' %}
+    {% include 'modals/instalar_extensao.html' %}
 
     <!-- Bootstrap JS local -->
     <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>

@@ -30,6 +30,7 @@
         if (menuItem) {
             menuItem.addEventListener('click', function(e) {
                 e.preventDefault();
+                // A verificação será feita quando o botão for clicado
                 if (btnSolicitarInternacoes) {
                     btnSolicitarInternacoes.click();
                 }
@@ -38,6 +39,48 @@
         
         if (btnSolicitarInternacoes) {
             btnSolicitarInternacoes.addEventListener('click', function() {
+                // Verificar se a extensão está instalada antes de abrir o modal
+                if (typeof verificarExtensaoInstalada === 'function' && !verificarExtensaoInstalada()) {
+                    // Extensão não está instalada - mostrar alerta
+                    alert('Para utilização desta função, é necessário instalar a Extensão no Chrome.');
+                    // Abrir modal de instalação da extensão
+                    if (typeof openModal === 'function') {
+                        // Verificar tipo de arquivo disponível antes de abrir
+                        fetch('/api/extension/check')
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    const instrucoesCrx = document.getElementById('instrucoes-crx');
+                                    const instrucoesZip = document.getElementById('instrucoes-zip');
+                                    
+                                    // Mostrar instruções corretas baseado no tipo de arquivo
+                                    if (data.has_crx) {
+                                        if (instrucoesCrx) instrucoesCrx.style.display = 'block';
+                                        if (instrucoesZip) instrucoesZip.style.display = 'none';
+                                    } else {
+                                        if (instrucoesCrx) instrucoesCrx.style.display = 'none';
+                                        if (instrucoesZip) instrucoesZip.style.display = 'block';
+                                    }
+                                }
+                                // Abrir modal
+                                openModal('modal-instalar-extensao');
+                            })
+                            .catch(error => {
+                                console.error('Erro ao verificar tipo de extensão:', error);
+                                // Abrir modal mesmo em caso de erro
+                                openModal('modal-instalar-extensao');
+                            });
+                    } else {
+                        // Fallback: tentar abrir o modal diretamente
+                        const modalInstalarExtensao = document.getElementById('modal-instalar-extensao');
+                        if (modalInstalarExtensao) {
+                            modalInstalarExtensao.style.display = 'flex';
+                            modalInstalarExtensao.classList.add('active');
+                        }
+                    }
+                    return;
+                }
+                // Extensão está instalada - abrir modal normalmente
                 openSolicitarInternacoesModal();
             });
         }

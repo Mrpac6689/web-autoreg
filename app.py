@@ -21,19 +21,29 @@ import warnings
 import websocket
 import base64
 from urllib.parse import urlparse, urljoin, quote as url_quote, unquote
-from config import WORKDIR, PYTHONPATH, AUTOREGPATH, DOCKER_CONTAINER, USE_DOCKER
+import zipfile
+import tempfile
+from config import WORKDIR, PYTHONPATH, AUTOREGPATH, DOCKER_CONTAINER, USE_DOCKER, SECRET_KEY
 from auth import autenticar, listar_usuarios, adicionar_usuario, remover_usuario, alterar_senha, usuario_existe
 
 # Desabilitar avisos de SSL não verificado
 warnings.filterwarnings('ignore', category=InsecureRequestWarning)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'autoreg-secret-key-change-in-production'
+# Carregar SECRET_KEY do arquivo env (gerado automaticamente ou definido manualmente)
+# Se não estiver definido, usa uma chave padrão (NÃO RECOMENDADO PARA PRODUÇÃO)
+if SECRET_KEY:
+    app.config['SECRET_KEY'] = SECRET_KEY
+else:
+    import warnings
+    warnings.warn("SECRET_KEY não definido no arquivo env! Usando chave padrão insegura. Configure SECRET_KEY no arquivo env para produção.")
+    app.config['SECRET_KEY'] = 'autoreg-secret-key-change-in-production'
 # Configurar cookie de sessão para compartilhar entre subdomínios
 app.config['SESSION_COOKIE_DOMAIN'] = '.michelpaes.com.br'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SECURE'] = True  # Apenas HTTPS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# Cookie de sessão expira quando o navegador é fechado (session cookie, sem max_age)
 
 # Função para adicionar headers CORS
 def adicionar_cors_headers(response):
@@ -193,12 +203,13 @@ def api_login():
     
     if usuario:
         user = User(usuario['username'], usuario['nome'])
-        login_user(user, remember=True)
+        login_user(user, remember=False)  # Sessão expira ao fechar o navegador
         
         # Criar resposta JSON e adicionar cookie para nginx
         response = jsonify({'success': True, 'username': usuario['username'], 'nome': usuario['nome']})
         try:
-            response.set_cookie('autoreg_auth', 'authenticated', domain='.michelpaes.com.br', secure=True, max_age=2592000)
+            # Cookie sem max_age = session cookie (expira ao fechar navegador)
+            response.set_cookie('autoreg_auth', 'authenticated', domain='.michelpaes.com.br', secure=True)
         except Exception as e:
             # Se houver erro ao definir cookie, apenas logar e continuar
             print(f"Erro ao definir cookie: {e}")
@@ -2819,6 +2830,78 @@ def auth_check():
         return '', 200
     else:
         return '', 401
+
+
+@app.route('/api/extension/download', methods=['GET'])
+@login_required
+def download_extension():
+    """
+    Cria um ZIP da extensão Chrome. Se o arquivo .crx existir, ele será incluído no ZIP.
+    Se não existir, cria um ZIP com todos os arquivos da pasta (exceto .pem).
+    """
+    try:
+        extension_dir = Path(__file__).parent / 'chrome-extension'
+        crx_file = extension_dir / 'chrome-extension.crx'
+        
+        # Criar um arquivo temporário para o ZIP
+        temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+        temp_zip_path = temp_zip.name
+        temp_zip.close()
+        
+        # Criar o ZIP
+        with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Se o arquivo .crx existe, adicionar ele ao ZIP
+            if crx_file.exists() and crx_file.is_file():
+                zipf.write(crx_file, crx_file.name)
+            else:
+                # Se não existe .crx, adicionar todos os arquivos da pasta, exceto .pem
+                for file_path in extension_dir.rglob('*'):
+                    if file_path.is_file():
+                        # Ignorar apenas arquivos .pem (chave privada)
+                        if file_path.suffix != '.pem':
+                            # Manter a estrutura de pastas relativa à pasta chrome-extension
+                            arcname = file_path.relative_to(extension_dir)
+                            zipf.write(file_path, arcname)
+        
+        # Servir o arquivo ZIP
+        return send_file(
+            temp_zip_path,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name='chrome-extension.zip'
+        )
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao preparar extensão: {str(e)}'
+        }), 500
+
+
+@app.route('/api/extension/check', methods=['GET'])
+@login_required
+def check_extension_type():
+    """
+    Verifica se o arquivo .crx existe e retorna o tipo de instalação
+    """
+    try:
+        extension_dir = Path(__file__).parent / 'chrome-extension'
+        crx_file = extension_dir / 'chrome-extension.crx'
+        
+        has_crx = crx_file.exists() and crx_file.is_file()
+        
+        return jsonify({
+            'success': True,
+            'has_crx': has_crx,
+            'file_type': 'crx' if has_crx else 'zip'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao verificar extensão: {str(e)}'
+        }), 500
+
 
 if __name__ == '__main__':
     # Modo produção - escutar no IP do Tailscale

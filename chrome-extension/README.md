@@ -1,6 +1,27 @@
-# Autoreg CMS Helper - Extensão Chrome
+# Autoreg - Controle - Extensão Chrome
 
-Extensão do Chrome que adiciona botões flutuantes na página do CMS (https://cms.michelpaes.com.br) para interagir com o processo de solicitação de internações.
+Extensão do Chrome que adiciona botões flutuantes na página do KasmVNC rodando o core do AUTOREG.
+
+Autoreg é uma aplicação sob licença GNU GPL. Documentação e código fonte disponíveis em github.com/mrpac6689.
+
+## Licença
+
+```
+Copyright (C) 2024 Autoreg CMS Helper
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+```
 
 ## Funcionalidades
 
@@ -27,20 +48,22 @@ Extensão do Chrome que adiciona botões flutuantes na página do CMS (https://c
 ### Configuração
 
 1. Clique no ícone da extensão na barra de ferramentas
-2. Configure a URL base da API (ex: `https://autoreg.michelpaes.com.br` ou `http://localhost:5000`)
+2. Configure a URL base da API:
+   - **Core do Autoreg**: URL onde está rodando o KasmVNC com o core do Autoreg (ex: `https://cms.michelpaes.com.br`)
+   - **Frontend**: URL da aplicação web Autoreg (ex: `https://autoreg.michelpaes.com.br` ou `http://localhost:5000`)
 3. Clique em "Salvar"
 
-**Nota**: A extensão tentará detectar automaticamente a URL da API, mas é recomendado configurá-la manualmente.
+**Nota**: A extensão é configurável e não fica atrelada a um domínio específico. Você pode configurá-la para trabalhar com qualquer instalação do Autoreg. A extensão tentará detectar automaticamente a URL da API, mas é recomendado configurá-la manualmente para garantir o funcionamento correto.
 
 ## Como Funciona
 
-1. Quando você acessa `https://cms.michelpaes.com.br`, a extensão é ativada automaticamente
-2. Os botões flutuantes são injetados na página
-3. Ao clicar em "Salvar" ou "Pular", a extensão faz uma requisição POST para:
+1. Quando você acessa o endereço configurado (core do Autoreg ou frontend), a extensão é ativada automaticamente
+2. Os botões flutuantes são injetados na página do KasmVNC
+3. Ao clicar em "Salvar" ou "Pular" (ou usar os atalhos S/P), a extensão faz uma requisição para:
    ```
    {API_BASE_URL}/api/internacoes-solicitar/criar-flag
    ```
-4. A flag é criada no servidor e o processo backend continua a execução
+4. A flag (`grava.flag` ou `pula.flag`) é criada no servidor e o processo backend continua a execução
 
 ## Requisitos
 
@@ -65,7 +88,7 @@ chrome-extension/
 ## Notas
 
 - Os ícones da extensão precisam ser criados (16x16, 48x48, 128x128 pixels)
-- A extensão requer permissões para acessar `https://cms.michelpaes.com.br` e fazer requisições à API
+- A extensão requer permissões para acessar o endereço em que roda o core Docker do AutoReg. e fazer requisições à API.
 - As flags criadas são: `grava.flag` e `pula.flag`
 
 ## Desenvolvimento

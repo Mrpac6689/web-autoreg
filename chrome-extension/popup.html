@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <style>
         body {
-            width: 300px;
+            width: 350px;
             padding: 20px;
             font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Roboto', 'Poppins', 'Segoe UI', Arial, sans-serif;
         }
@@ -84,8 +84,14 @@
     </style>
 </head>
 <body>
-    <h3>Autoreg CMS Helper</h3>
+    <h3>Autoreg - Controle</h3>
     <div class="config-section">
+        <label for="coreUrl">URL do Core Autoreg:</label>
+        <input type="text" id="coreUrl" placeholder="https://cms.michelpaes.com.br">
+        <div class="info" style="margin-top: 5px; margin-bottom: 15px;">
+            URL onde está rodando o KasmVNC com o core do Autoreg. Os botões só aparecerão nesta página.
+        </div>
+        
         <label for="apiUrl">URL Base da API:</label>
         <input type="text" id="apiUrl" placeholder="https://autoreg.michelpaes.com.br">
         <button id="saveBtn">Salvar</button>

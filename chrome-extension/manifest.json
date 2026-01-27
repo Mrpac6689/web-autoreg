@@ -1,27 +1,24 @@
 {
   "manifest_version": 3,
-  "name": "Autoreg CMS Helper",
+  "name": "Autoreg - Controle",
   "version": "1.0.0",
-  "description": "Botões flutuantes para interação com o processo de solicitação de internações no CMS",
+  "description": "Extensão do Chrome para suporte ao módulo Solicitação de Internações do Autoreg.",
   "permissions": [
     "storage",
     "activeTab",
     "cookies"
   ],
   "host_permissions": [
-    "https://cms.michelpaes.com.br/*",
-    "https://autoreg.michelpaes.com.br/*",
-    "https://michelpaes.com.br/*",
     "https://*/api/*",
-    "http://localhost:*/api/*",
-    "http://127.0.0.1:*/api/*"
+    "http://*/api/*"
   ],
   "content_scripts": [
     {
-      "matches": ["https://cms.michelpaes.com.br/*"],
+      "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
       "js": ["content.js"],
       "css": ["content.css"],
-      "run_at": "document_end"
+      "run_at": "document_end",
+      "all_frames": false
     }
   ],
   "background": {

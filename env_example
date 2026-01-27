@@ -1,0 +1,63 @@
+# ============================================
+# ARQUIVO DE CONFIGURAÇÃO - EXEMPLO
+# ============================================
+# 
+# INSTRUÇÕES:
+# 1. Copie este arquivo para 'env' (sem o _example)
+# 2. Preencha os valores conforme sua instalação
+# 3. O arquivo 'env' está no .gitignore e NÃO será commitado
+# 4. NUNCA commite o arquivo 'env' com valores reais!
+#
+# ============================================
+
+# Diretório para arquivos temporários:
+# Caminho completo do diretório onde serão armazenados arquivos temporários
+
+WORKDIR = /home/michel/AutoReg
+
+# Caminho do python3:
+# Caminho completo do executável Python 3
+
+PYTHONPATH = /usr/bin/python3
+
+# Caminho da aplicação Autoreg:
+# Caminho completo do arquivo autoreg.py
+
+AUTOREGPATH = /home/kasm-user/.autoreg/autoreg.py
+
+# Comando de entrada no container Docker:
+# Comando completo para executar bash dentro do container Docker
+# Formato: /usr/bin/docker exec -it <nome_container> bash
+
+DOCKER = /usr/bin/docker exec -it autoreg bash
+
+# Ativar/Desativar execução em container Docker:
+# Use 'true', '1', 'yes', 'on' ou 'enabled' para ativar
+# Use 'false', '0', 'no', 'off' ou 'disabled' para desativar
+
+USE_DOCKER = true
+
+# ============================================
+# SEGURANÇA - CHAVE SECRETA
+# ============================================
+# 
+# Chave secreta para assinatura de cookies e sessões Flask
+# 
+# IMPORTANTE:
+# - Esta chave é CRÍTICA para a segurança da aplicação
+# - Ela protege cookies de sessão e autenticação
+# - NUNCA compartilhe ou exponha esta chave
+# - Use uma chave diferente para cada ambiente (dev, produção)
+# 
+# COMO GERAR UMA CHAVE SEGURA:
+# Execute no terminal:
+#   python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+# 
+# Isso gerará uma chave aleatória segura de 43 caracteres
+# 
+# EXEMPLO (NÃO USE ESTA CHAVE EM PRODUÇÃO!):
+# SECRET_KEY = sua-chave-aleatoria-gerada-aqui
+#
+# ============================================
+
+SECRET_KEY = GERAR_UMA_CHAVE_ALEATORIA_AQUI

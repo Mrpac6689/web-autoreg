@@ -15,9 +15,45 @@
     ];
 
     let apiBaseUrl = null;
+    let coreUrl = null;
     let buttonsContainer = null;
     let btnSalvar = null;
     let btnPular = null;
+
+    /**
+     * Verifica se a página atual é a página do Core Autoreg
+     */
+    async function verificarSeEPaginaCore() {
+        // Obter URL do Core do storage
+        const stored = await chrome.storage.local.get(['coreUrl']);
+        if (!stored.coreUrl) {
+            // Se não estiver configurado, não mostrar botões
+            return false;
+        }
+        
+        coreUrl = stored.coreUrl;
+        
+        // Obter a origem atual (sem path)
+        const currentOrigin = window.location.origin;
+        
+        // Comparar origens
+        try {
+            const coreUrlObj = new URL(coreUrl);
+            const currentUrlObj = new URL(currentOrigin);
+            
+            // Comparar host (incluindo porta se houver)
+            // Isso garante que https://cms.michelpaes.com.br corresponda a https://cms.michelpaes.com.br
+            const coreHost = coreUrlObj.host.toLowerCase();
+            const currentHost = currentUrlObj.host.toLowerCase();
+            
+            return coreHost === currentHost;
+        } catch (e) {
+            // Fallback: comparação simples de strings (case-insensitive)
+            const coreUrlLower = coreUrl.toLowerCase();
+            const currentOriginLower = currentOrigin.toLowerCase();
+            return currentOriginLower === coreUrlLower || currentOriginLower.startsWith(coreUrlLower);
+        }
+    }
 
     /**
      * Detecta a URL base da API
@@ -289,9 +325,68 @@
     }
 
     /**
+     * Injeta um elemento invisível para sinalizar que a extensão está instalada
+     * Isso é usado na página da API para que o botão "Instalar Extensão" seja ocultado
+     */
+    function injetarMarcadorExtensao() {
+        // Verificar se já existe o marcador
+        if (document.getElementById('autoreg-extension-installed-marker')) {
+            return;
+        }
+        
+        // Criar elemento invisível para sinalizar que a extensão está instalada
+        const marker = document.createElement('div');
+        marker.id = 'autoreg-extension-installed-marker';
+        marker.style.display = 'none';
+        marker.setAttribute('data-autoreg-extension', 'installed');
+        document.body.appendChild(marker);
+    }
+
+    /**
      * Inicialização
      */
-    function init() {
+    async function init() {
+        // Verificar se é a página do Core antes de criar os botões
+        const ePaginaCore = await verificarSeEPaginaCore();
+        
+        if (!ePaginaCore) {
+            // Não é a página do Core, mas pode ser a página da API
+            // Verificar se é a página da API e injetar marcador invisível
+            const stored = await chrome.storage.local.get(['apiBaseUrl']);
+            
+            let deveInjetarMarcador = false;
+            
+            if (stored.apiBaseUrl) {
+                try {
+                    const apiUrlObj = new URL(stored.apiBaseUrl);
+                    const currentUrlObj = new URL(window.location.origin);
+                    
+                    // Se for a página da API, injetar marcador
+                    if (apiUrlObj.host.toLowerCase() === currentUrlObj.host.toLowerCase()) {
+                        deveInjetarMarcador = true;
+                    }
+                } catch (e) {
+                    // Se houver erro ao comparar URLs, não injetar (evitar falsos positivos)
+                    console.log('Erro ao comparar URLs:', e);
+                }
+            }
+            
+            // Se deve injetar o marcador, fazer isso
+            if (deveInjetarMarcador) {
+                // Aguardar página carregar
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        injetarMarcadorExtensao();
+                    });
+                } else {
+                    injetarMarcadorExtensao();
+                }
+            }
+            
+            return;
+        }
+        
+        // É a página do Core, continuar com a inicialização
         // Aguardar página carregar completamente
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function() {

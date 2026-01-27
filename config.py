@@ -62,6 +62,11 @@ DOCKER = env_config.get('DOCKER', '/usr/bin/docker exec -it autoreg bash')
 USE_DOCKER_STR = env_config.get('USE_DOCKER', 'false').lower().strip()
 USE_DOCKER = USE_DOCKER_STR in ['true', '1', 'yes', 'on', 'enabled']
 
+# Chave secreta para assinatura de cookies e sessões
+# IMPORTANTE: Gere uma chave aleatória única para produção!
+# Use: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+SECRET_KEY = env_config.get('SECRET_KEY', None)
+
 # Extrair nome do container do comando Docker
 # Formato esperado: /usr/bin/docker exec -it <container> bash
 DOCKER_CONTAINER = None

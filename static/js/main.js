@@ -25,6 +25,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Configurar botão de visualizar robô
     setupVisualizarRobo();
+    
+    // Verificar se extensão está instalada e ocultar botão se necessário
+    verificarExtensaoEAtualizarBotao();
+    
+    // Configurar botão de instalar extensão
+    setupInstalarExtensao();
 });
 
 /**
@@ -77,6 +83,7 @@ function setupButtonListeners() {
 function openModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
+        modal.style.display = 'flex';
         modal.classList.add('active');
     }
 }
@@ -88,6 +95,7 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.remove('active');
+        modal.style.display = 'none';
     }
 }
 
@@ -287,6 +295,233 @@ function setupVisualizarRobo() {
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && modalVisualizarRobo && modalVisualizarRobo.classList.contains('active') && iframeRobo) {
             closeModal('modal-visualizar-robo');
+        }
+    });
+}
+
+/**
+ * Verifica se a extensão Chrome está instalada e atualiza a visibilidade do botão
+ * Se não estiver instalada, mostra o botão. Se estiver, mantém oculto.
+ */
+function verificarExtensaoEAtualizarBotao() {
+    const btnInstalarExtensao = document.getElementById('btn-instalar-extensao');
+    if (!btnInstalarExtensao) {
+        return;
+    }
+    
+    // Função para mostrar o botão (extensão não está instalada)
+    function mostrarBotao() {
+        btnInstalarExtensao.style.display = 'flex';
+    }
+    
+    // Função para ocultar o botão (extensão está instalada)
+    function ocultarBotao() {
+        btnInstalarExtensao.style.display = 'none';
+    }
+    
+    // Verificar se a extensão está instalada
+    // A extensão injeta um marcador invisível na página da API
+    function verificarElementosExtensao() {
+        // Usar a função global para verificar
+        const extensaoInstalada = verificarExtensaoInstalada();
+        
+        if (extensaoInstalada) {
+            // Extensão está instalada - manter oculto
+            ocultarBotao();
+            return true;
+        } else {
+            // Extensão não está instalada - mostrar botão
+            mostrarBotao();
+            return false;
+        }
+    }
+    
+    // Aguardar um pouco para dar tempo da extensão carregar (se estiver instalada)
+    setTimeout(function() {
+        // Verificar imediatamente após o delay
+        const extensaoInstalada = verificarElementosExtensao();
+        
+        // Se a extensão não estiver instalada, já mostramos o botão
+        // Se estiver instalada, continuamos verificando periodicamente para garantir
+        if (extensaoInstalada) {
+            // Extensão encontrada, manter oculto e continuar verificando por um tempo
+            let tentativas = 0;
+            const intervalo = setInterval(function() {
+                tentativas++;
+                // Verificar novamente para garantir
+                verificarElementosExtensao();
+                if (tentativas >= 5) {
+                    clearInterval(intervalo);
+                }
+            }, 500);
+            
+            // Usar MutationObserver para detectar mudanças
+            const observer = new MutationObserver(function(mutations) {
+                verificarElementosExtensao();
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            
+            // Parar observação após alguns segundos
+            setTimeout(() => {
+                observer.disconnect();
+            }, 5000);
+        } else {
+            // Extensão não encontrada, mas continuar verificando por um tempo
+            // caso a extensão seja instalada depois
+            let tentativas = 0;
+            const intervalo = setInterval(function() {
+                tentativas++;
+                if (verificarElementosExtensao() || tentativas >= 20) {
+                    clearInterval(intervalo);
+                }
+            }, 500);
+            
+            // Usar MutationObserver para detectar quando a extensão injeta elementos
+            const observer = new MutationObserver(function(mutations) {
+                if (verificarElementosExtensao()) {
+                    observer.disconnect();
+                    clearInterval(intervalo);
+                }
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            
+            // Parar observação após 10 segundos
+            setTimeout(() => {
+                observer.disconnect();
+                clearInterval(intervalo);
+            }, 10000);
+        }
+        
+        // Também verificar quando a página recebe foco (usuário pode ter instalado em outra aba)
+        window.addEventListener('focus', function() {
+            verificarElementosExtensao();
+        });
+    }, 1000); // Aguardar 1 segundo para dar tempo da extensão carregar
+}
+
+/**
+ * Função global para verificar se a extensão Chrome está instalada e ativa
+ * Retorna true se estiver instalada, false caso contrário
+ * Esta função pode ser usada por outros módulos para verificar a instalação da extensão
+ */
+function verificarExtensaoInstalada() {
+    // Verificar se há o marcador invisível da extensão
+    const marcadorExtensao = document.getElementById('autoreg-extension-installed-marker');
+    
+    if (marcadorExtensao) {
+        return true;
+    }
+    
+    // Fallback: verificar também os botões flutuantes (caso esteja na página do Core)
+    const elementosExtensao = document.querySelectorAll(
+        '.autoreg-floating-buttons-container, ' +
+        '.autoreg-floating-action-button-round, ' +
+        '#autoreg-btn-salvar-spa, ' +
+        '#autoreg-btn-pular-spa'
+    );
+    
+    return elementosExtensao.length > 0;
+}
+
+/**
+ * Configura o botão e modal para instalar extensão Chrome
+ */
+function setupInstalarExtensao() {
+    const btnInstalarExtensao = document.getElementById('btn-instalar-extensao');
+    const modalInstalarExtensao = document.getElementById('modal-instalar-extensao');
+    const closeModalBtn = document.getElementById('close-modal-instalar-extensao');
+    const btnFecharModal = document.getElementById('btn-fechar-modal-extensao');
+    const btnDownloadExtensao = document.getElementById('btn-download-extensao');
+    const instrucoesCrx = document.getElementById('instrucoes-crx');
+    const instrucoesZip = document.getElementById('instrucoes-zip');
+    
+    // Abrir modal ao clicar no botão
+    if (btnInstalarExtensao) {
+        btnInstalarExtensao.addEventListener('click', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            
+            if (!modalInstalarExtensao) {
+                console.error('Modal não encontrado: modal-instalar-extensao');
+                return;
+            }
+            
+            // Verificar tipo de arquivo disponível
+            fetch('/api/extension/check')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Mostrar instruções corretas baseado no tipo de arquivo
+                        if (data.has_crx) {
+                            if (instrucoesCrx) instrucoesCrx.style.display = 'block';
+                            if (instrucoesZip) instrucoesZip.style.display = 'none';
+                        } else {
+                            if (instrucoesCrx) instrucoesCrx.style.display = 'none';
+                            if (instrucoesZip) instrucoesZip.style.display = 'block';
+                        }
+                    }
+                    
+                    // Abrir modal
+                    openModal('modal-instalar-extensao');
+                })
+                .catch(error => {
+                    console.error('Erro ao verificar tipo de extensão:', error);
+                    // Mostrar instruções ZIP por padrão em caso de erro
+                    if (instrucoesCrx) instrucoesCrx.style.display = 'none';
+                    if (instrucoesZip) instrucoesZip.style.display = 'block';
+                    openModal('modal-instalar-extensao');
+                });
+        });
+    } else {
+        console.error('Botão btn-instalar-extensao não encontrado');
+    }
+    
+    // Botão de download
+    if (btnDownloadExtensao) {
+        btnDownloadExtensao.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Fazer download do arquivo
+            window.location.href = '/api/extension/download';
+        });
+    }
+    
+    // Fechar modal ao clicar no botão de fechar (X)
+    if (closeModalBtn && modalInstalarExtensao) {
+        closeModalBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeModal('modal-instalar-extensao');
+        });
+    }
+    
+    // Fechar modal ao clicar no botão "Fechar"
+    if (btnFecharModal && modalInstalarExtensao) {
+        btnFecharModal.addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeModal('modal-instalar-extensao');
+        });
+    }
+    
+    // Fechar modal ao clicar fora dele
+    if (modalInstalarExtensao) {
+        modalInstalarExtensao.addEventListener('click', function(e) {
+            if (e.target === modalInstalarExtensao) {
+                closeModal('modal-instalar-extensao');
+            }
+        });
+    }
+    
+    // Fechar modal com tecla ESC
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modalInstalarExtensao && modalInstalarExtensao.classList.contains('active')) {
+            closeModal('modal-instalar-extensao');
         }
     });
 }
