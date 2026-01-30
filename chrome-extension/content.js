@@ -5,6 +5,21 @@
 
 (function() {
     'use strict';
+    
+    // Suprimir erros de console que vêm de páginas externas/iframes
+    // Isso evita poluição do console com erros que não podemos controlar
+    const originalError = console.error;
+    console.error = function(...args) {
+        // Filtrar erros conhecidos que vêm de páginas externas
+        const errorMessage = args.join(' ');
+        if (errorMessage.includes('Failed to get subsystem status') ||
+            errorMessage.includes('subsystem status for purpose')) {
+            // Suprimir esse erro específico que vem de páginas externas
+            return;
+        }
+        // Para outros erros, usar o console.error original
+        originalError.apply(console, args);
+    };
 
     // Configurações
     const API_ENDPOINTS = [

@@ -6,6 +6,7 @@ Gerencia usuários e senhas com criptografia bcrypt
 import bcrypt
 import json
 import os
+import secrets
 from pathlib import Path
 from typing import Optional, Dict, List
 
@@ -53,14 +54,29 @@ def verificar_senha(senha: str, hash_senha: str) -> bool:
         return False
 
 
+def gerar_chave_api() -> str:
+    """Gera uma chave de API segura"""
+    return secrets.token_urlsafe(32)
+
+
 def adicionar_usuario(username: str, senha: str, nome: str = "") -> bool:
-    """Adiciona ou atualiza um usuário"""
+    """Adiciona ou atualiza um usuário (gera chave de API automaticamente se não existir)"""
     usuarios = carregar_usuarios()
+    
+    # Se o usuário já existe, manter a chave de API existente
+    chave_api = None
+    if username in usuarios:
+        chave_api = usuarios[username].get('api_key')
+    
+    # Se não tem chave, gerar uma nova
+    if not chave_api:
+        chave_api = gerar_chave_api()
     
     usuarios[username] = {
         'senha_hash': hash_senha(senha),
         'nome': nome or username,
-        'ativo': True
+        'ativo': True,
+        'api_key': chave_api
     }
     
     return salvar_usuarios(usuarios)
@@ -78,7 +94,7 @@ def remover_usuario(username: str) -> bool:
 
 
 def listar_usuarios() -> List[Dict]:
-    """Lista todos os usuários (sem senhas)"""
+    """Lista todos os usuários (sem senhas e sem chaves de API)"""
     usuarios = carregar_usuarios()
     return [
         {
@@ -88,6 +104,41 @@ def listar_usuarios() -> List[Dict]:
         }
         for username, data in usuarios.items()
     ]
+
+
+def obter_usuario_por_chave_api(chave_api: str) -> Optional[Dict]:
+    """Obtém usuário pela chave de API"""
+    usuarios = carregar_usuarios()
+    
+    for username, data in usuarios.items():
+        if data.get('api_key') == chave_api:
+            # Verificar se está ativo
+            if not data.get('ativo', True):
+                return None
+            return {
+                'username': username,
+                'nome': data.get('nome', username)
+            }
+    
+    return None
+
+
+def gerar_chaves_para_usuarios_existentes() -> Dict[str, int]:
+    """Gera chaves de API para usuários que não possuem"""
+    usuarios = carregar_usuarios()
+    geradas = 0
+    atualizados = {}
+    
+    for username, data in usuarios.items():
+        if 'api_key' not in data or not data.get('api_key'):
+            data['api_key'] = gerar_chave_api()
+            geradas += 1
+            atualizados[username] = data['api_key']
+    
+    if geradas > 0:
+        salvar_usuarios(usuarios)
+    
+    return {'geradas': geradas, 'chaves': atualizados}
 
 
 def autenticar(username: str, senha: str) -> Optional[Dict]:

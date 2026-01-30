@@ -22,7 +22,9 @@
         const btnClose = document.getElementById('close-modal-solicitar-internacoes');
         const btnFechar = document.getElementById('btn-fechar-solicitar-internacoes');
         const btnRevisarAIH = document.getElementById('btn-revisar-aih-internacoes');
-        const btnIniciar = document.getElementById('btn-iniciar-processo-internacoes');
+        const btnExtrairGHosp = document.getElementById('btn-extrair-ghosp-internacoes');
+        const btnSolicitarSISREG = document.getElementById('btn-solicitar-sisreg-internacoes');
+        const btnGravaCodigos = document.getElementById('btn-grava-codigos-internacoes');
         const btnInterromper = document.getElementById('btn-interromper-processo-internacoes');
         const btnExibirPendencias = document.getElementById('btn-exibir-pendencias-internacoes');
         
@@ -104,9 +106,21 @@
             });
         }
         
-        if (btnIniciar) {
-            btnIniciar.addEventListener('click', function() {
-                iniciarSolicitacoes();
+        if (btnExtrairGHosp) {
+            btnExtrairGHosp.addEventListener('click', function() {
+                extrairInformacoesGHosp();
+            });
+        }
+        
+        if (btnSolicitarSISREG) {
+            btnSolicitarSISREG.addEventListener('click', function() {
+                solicitarSISREG();
+            });
+        }
+        
+        if (btnGravaCodigos) {
+            btnGravaCodigos.addEventListener('click', function() {
+                gravaCodigosSolicitacao();
             });
         }
         
@@ -591,6 +605,271 @@
                             if (modalRoboAberto) {
                                 fecharModalRobo();
                             }
+                            finalizarExecucao(false);
+                            break;
+                    }
+                } catch (e) {
+                    console.error('Erro ao processar evento:', e, dadosJson);
+                }
+            }
+            
+            lerStream();
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            adicionarLinhaTerminal(`\n❌ Erro ao executar comando: ${error.message}`);
+            finalizarExecucao(false);
+        });
+    }
+    
+    /**
+     * Extrai informações GHosp (grava produção e executa -sia)
+     */
+    function extrairInformacoesGHosp() {
+        if (isExecutando) {
+            return;
+        }
+        
+        isExecutando = true;
+        sessionId = Date.now().toString();
+        
+        atualizarBotoes();
+        
+        // Mostrar ETA
+        const etaContainer = document.getElementById('eta-container-solicitar-internacoes');
+        if (etaContainer) {
+            etaContainer.style.display = 'block';
+        }
+        
+        resetarTerminal();
+        adicionarLinhaTerminal('Iniciando extração de informações GHosp...');
+        adicionarLinhaTerminal('Gravando produção no relatório...');
+        atualizarETA('Gravando produção...', 0, 'Registrando produção');
+        
+        // Primeiro, gravar a produção no relatório
+        fetch('/api/internacoes-solicitar/gravar-producao', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                adicionarLinhaTerminal(`✅ ${data.mensagem}`);
+                adicionarLinhaTerminal('Executando comando: -sia');
+                atualizarETA('Preparando...', 0, 'Aguardando início');
+                
+                // Executar comando -sia (índice 1)
+                executarComandoIndividual(1, '-sia', 'Extração de informações GHosp');
+            } else {
+                adicionarLinhaTerminal(`⚠️ Aviso: ${data.error || 'Erro ao gravar produção'}`);
+                adicionarLinhaTerminal('Continuando com a execução do comando...');
+                adicionarLinhaTerminal('Executando comando: -sia');
+                atualizarETA('Preparando...', 0, 'Aguardando início');
+                
+                // Continuar mesmo com erro na gravação
+                executarComandoIndividual(1, '-sia', 'Extração de informações GHosp');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao gravar produção:', error);
+            adicionarLinhaTerminal(`⚠️ Aviso: Erro ao gravar produção: ${error.message}`);
+            adicionarLinhaTerminal('Continuando com a execução do comando...');
+            adicionarLinhaTerminal('Executando comando: -sia');
+            atualizarETA('Preparando...', 0, 'Aguardando início');
+            
+            // Continuar mesmo com erro na gravação
+            executarComandoIndividual(1, '-sia', 'Extração de informações GHosp');
+        });
+    }
+    
+    /**
+     * Solicita SISREG (executa -ssr)
+     */
+    function solicitarSISREG() {
+        if (isExecutando) {
+            return;
+        }
+        
+        isExecutando = true;
+        sessionId = Date.now().toString();
+        
+        atualizarBotoes();
+        
+        // Mostrar ETA
+        const etaContainer = document.getElementById('eta-container-solicitar-internacoes');
+        if (etaContainer) {
+            etaContainer.style.display = 'block';
+        }
+        
+        resetarTerminal();
+        adicionarLinhaTerminal('Iniciando solicitação SISREG...');
+        adicionarLinhaTerminal('Executando comando: -ssr');
+        atualizarETA('Preparando...', 0, 'Aguardando início');
+        
+        // Executar comando -ssr (índice 2)
+        executarComandoIndividual(2, '-ssr', 'Solicitação SISREG');
+    }
+    
+    /**
+     * Grava códigos de solicitação (executa -snt)
+     */
+    function gravaCodigosSolicitacao() {
+        if (isExecutando) {
+            return;
+        }
+        
+        isExecutando = true;
+        sessionId = Date.now().toString();
+        
+        atualizarBotoes();
+        
+        // Mostrar ETA
+        const etaContainer = document.getElementById('eta-container-solicitar-internacoes');
+        if (etaContainer) {
+            etaContainer.style.display = 'block';
+        }
+        
+        resetarTerminal();
+        adicionarLinhaTerminal('Iniciando gravação de códigos de solicitação...');
+        adicionarLinhaTerminal('Executando comando: -snt');
+        atualizarETA('Preparando...', 0, 'Aguardando início');
+        
+        // Executar comando -snt (índice 3)
+        executarComandoIndividual(3, '-snt', 'Gravação de códigos de solicitação');
+    }
+    
+    /**
+     * Executa um comando individual usando o endpoint existente
+     */
+    function executarComandoIndividual(comandoIndex, nomeComando, descricao) {
+        adicionarLinhaTerminal(`\n>>> Executando comando: ${nomeComando}`);
+        atualizarETA(`Executando ${nomeComando}...`, 0, descricao);
+        
+        fetch('/api/internacoes-solicitar/executar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                comando_index: comandoIndex
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Erro na resposta do servidor');
+            }
+            
+            const reader = response.body.getReader();
+            readerAtual = reader;
+            const decoder = new TextDecoder();
+            let buffer = '';
+            
+            function lerStream(tentativas = 0) {
+                const maxTentativas = 5;
+                const delayRetry = 2000; // 2 segundos
+                
+                reader.read().then(({ done, value }) => {
+                    if (done) {
+                        if (buffer.trim()) {
+                            const linhas = buffer.split('\n');
+                            linhas.forEach(linha => {
+                                if (linha.startsWith('data: ')) {
+                                    processarEventoIndividual(linha.substring(6), descricao);
+                                }
+                            });
+                        }
+                        return;
+                    }
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const linhas = buffer.split('\n');
+                    buffer = linhas.pop() || '';
+                    
+                    linhas.forEach(linha => {
+                        if (linha.startsWith('data: ')) {
+                            processarEventoIndividual(linha.substring(6), descricao);
+                        }
+                    });
+                    
+                    lerStream(0); // Resetar tentativas em caso de sucesso
+                }).catch(error => {
+                    console.error('Erro ao ler stream:', error);
+                    const errorMsg = error.message.toLowerCase();
+                    
+                    // Verificar se é network error e ainda há tentativas
+                    if ((errorMsg.includes('network error') || errorMsg.includes('failed to fetch') || errorMsg.includes('networkerror')) && tentativas < maxTentativas) {
+                        adicionarLinhaTerminal(`\n⚠️ Erro de rede detectado. Tentando reconectar... (${tentativas + 1}/${maxTentativas})`);
+                        
+                        // Tentar reconectar após delay
+                        setTimeout(() => {
+                            // Recriar a requisição para retomar o processo
+                            fetch('/api/internacoes-solicitar/executar', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    session_id: sessionId,
+                                    comando_index: comandoIndex
+                                })
+                            })
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error('Erro na resposta do servidor');
+                                }
+                                
+                                const newReader = response.body.getReader();
+                                readerAtual = newReader;
+                                const newDecoder = new TextDecoder();
+                                buffer = ''; // Resetar buffer
+                                
+                                // Continuar leitura com nova conexão
+                                lerStream(tentativas + 1);
+                            })
+                            .catch(retryError => {
+                                if (tentativas + 1 < maxTentativas) {
+                                    lerStream(tentativas + 1);
+                                } else {
+                                    adicionarLinhaTerminal(`\n❌ Erro ao executar comando após ${maxTentativas} tentativas: ${retryError.message}`);
+                                    finalizarExecucao(false);
+                                }
+                            });
+                        }, delayRetry);
+                    } else {
+                        adicionarLinhaTerminal(`\n❌ Erro ao executar comando: ${error.message}`);
+                        finalizarExecucao(false);
+                    }
+                });
+            }
+            
+            function processarEventoIndividual(dadosJson, descricao) {
+                try {
+                    const data = JSON.parse(dadosJson);
+                    
+                    switch(data.tipo) {
+                        case 'inicio':
+                            adicionarLinhaTerminal(`\n>>> Iniciando: ${data.comando}`);
+                            break;
+                            
+                        case 'output':
+                            adicionarLinhaTerminal(data.linha);
+                            break;
+                            
+                        case 'aguardando_input':
+                            adicionarLinhaTerminal(`\n⏸️ Aguardando interação do usuário...`);
+                            break;
+                            
+                        case 'sucesso':
+                            atualizarETA('Concluído!', 100, `${descricao} concluída`);
+                            adicionarLinhaTerminal(`\n✅ ${data.mensagem || 'Comando executado com sucesso!'}`);
+                            finalizarExecucao(true);
+                            break;
+                            
+                        case 'erro':
+                            adicionarLinhaTerminal(`\n❌ Erro: ${data.mensagem}`);
                             finalizarExecucao(false);
                             break;
                     }
@@ -1162,30 +1441,68 @@
      */
     function atualizarBotoes() {
         const btnRevisarAIH = document.getElementById('btn-revisar-aih-internacoes');
-        const btnIniciar = document.getElementById('btn-iniciar-processo-internacoes');
+        const btnExtrairGHosp = document.getElementById('btn-extrair-ghosp-internacoes');
+        const btnSolicitarSISREG = document.getElementById('btn-solicitar-sisreg-internacoes');
+        const btnGravaCodigos = document.getElementById('btn-grava-codigos-internacoes');
+        const btnExibirPendencias = document.getElementById('btn-exibir-pendencias-internacoes');
+        const btnProcessarPendencias = document.getElementById('btn-processar-pendencias-internacoes');
         const btnInterromper = document.getElementById('btn-interromper-processo-internacoes');
         
         if (isExecutando) {
+            // Desabilitar e esconder todos os botões de ação durante execução
             if (btnRevisarAIH) {
                 btnRevisarAIH.disabled = true;
                 btnRevisarAIH.style.display = 'none';
             }
-            if (btnIniciar) {
-                btnIniciar.disabled = true;
-                btnIniciar.style.display = 'none';
+            if (btnExtrairGHosp) {
+                btnExtrairGHosp.disabled = true;
+                btnExtrairGHosp.style.display = 'none';
+            }
+            if (btnSolicitarSISREG) {
+                btnSolicitarSISREG.disabled = true;
+                btnSolicitarSISREG.style.display = 'none';
+            }
+            if (btnGravaCodigos) {
+                btnGravaCodigos.disabled = true;
+                btnGravaCodigos.style.display = 'none';
+            }
+            if (btnExibirPendencias) {
+                btnExibirPendencias.disabled = true;
+                btnExibirPendencias.style.display = 'none';
+            }
+            if (btnProcessarPendencias) {
+                btnProcessarPendencias.disabled = true;
+                btnProcessarPendencias.style.display = 'none';
             }
             if (btnInterromper) {
                 btnInterromper.disabled = false;
                 btnInterromper.style.display = 'inline-block';
             }
         } else {
+            // Habilitar e mostrar todos os botões quando não está executando
             if (btnRevisarAIH) {
                 btnRevisarAIH.disabled = false;
                 btnRevisarAIH.style.display = 'inline-block';
             }
-            if (btnIniciar) {
-                btnIniciar.disabled = false;
-                btnIniciar.style.display = 'inline-block';
+            if (btnExtrairGHosp) {
+                btnExtrairGHosp.disabled = false;
+                btnExtrairGHosp.style.display = 'inline-block';
+            }
+            if (btnSolicitarSISREG) {
+                btnSolicitarSISREG.disabled = false;
+                btnSolicitarSISREG.style.display = 'inline-block';
+            }
+            if (btnGravaCodigos) {
+                btnGravaCodigos.disabled = false;
+                btnGravaCodigos.style.display = 'inline-block';
+            }
+            if (btnExibirPendencias) {
+                btnExibirPendencias.disabled = false;
+                btnExibirPendencias.style.display = 'inline-block';
+            }
+            if (btnProcessarPendencias) {
+                btnProcessarPendencias.disabled = false;
+                btnProcessarPendencias.style.display = 'inline-block';
             }
             if (btnInterromper) {
                 btnInterromper.style.display = 'none';

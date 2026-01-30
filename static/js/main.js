@@ -10,9 +10,10 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.appendChild(btnVisualizarRobo);
     }
     
-    // Atualizar data e hora
+    // Atualizar data e hora com tratamento de erro melhorado
     updateDateTime();
-    setInterval(updateDateTime, 1000);
+    // Usar intervalo maior para reduzir carga no servidor (5 segundos)
+    setInterval(updateDateTime, 5000);
     
     // Configurar event listeners para botões
     setupButtonListeners();
@@ -33,20 +34,57 @@ document.addEventListener('DOMContentLoaded', function() {
     setupInstalarExtensao();
 });
 
+// Variável para controlar se já está fazendo uma requisição
+let isUpdatingDateTime = false;
+// Contador de erros consecutivos
+let consecutiveErrors = 0;
+// Intervalo máximo entre tentativas quando há erros (em ms)
+const MAX_RETRY_INTERVAL = 30000; // 30 segundos
+
 /**
  * Atualiza a data e hora atual
  */
 function updateDateTime() {
+    // Evitar múltiplas requisições simultâneas
+    if (isUpdatingDateTime) {
+        return;
+    }
+    
+    // Se houver muitos erros consecutivos, aumentar o intervalo entre tentativas
+    if (consecutiveErrors > 3) {
+        // Usar fallback local e não fazer requisição por um tempo
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('pt-BR');
+        const timeStr = now.toLocaleTimeString('pt-BR');
+        const timeElement = document.getElementById('current-time');
+        if (timeElement) {
+            timeElement.textContent = `${dateStr} - ${timeStr}`;
+        }
+        return;
+    }
+    
+    isUpdatingDateTime = true;
+    
     fetch('/api/current-time')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            consecutiveErrors = 0; // Resetar contador de erros em caso de sucesso
             const timeElement = document.getElementById('current-time');
             if (timeElement) {
                 timeElement.textContent = `${data.date} - ${data.time}`;
             }
         })
         .catch(error => {
-            console.error('Erro ao atualizar data/hora:', error);
+            consecutiveErrors++;
+            // Só logar erro se não houver muitos erros consecutivos (evitar spam)
+            if (consecutiveErrors <= 3) {
+                console.warn('Erro ao atualizar data/hora do servidor, usando data/hora local:', error.message);
+            }
             // Fallback para data/hora local
             const now = new Date();
             const dateStr = now.toLocaleDateString('pt-BR');
@@ -55,6 +93,9 @@ function updateDateTime() {
             if (timeElement) {
                 timeElement.textContent = `${dateStr} - ${timeStr}`;
             }
+        })
+        .finally(() => {
+            isUpdatingDateTime = false;
         });
 }
 

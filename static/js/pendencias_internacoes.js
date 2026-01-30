@@ -68,6 +68,21 @@
     }
 
     /**
+     * Configura os event listeners do botão atualizar
+     */
+    function setupAtualizarButton() {
+        const btnAtualizar = document.getElementById('btn-atualizar-pendencias-internacoes');
+        if (btnAtualizar && !btnAtualizar.dataset.listenerAttached) {
+            btnAtualizar.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                loadPendenciasData();
+            });
+            btnAtualizar.dataset.listenerAttached = 'true';
+        }
+    }
+    
+    /**
      * Inicializa o modal de pendências
      */
     function initPendenciasModal() {
@@ -90,7 +105,9 @@
         }
         
         if (btnAtualizar) {
-            btnAtualizar.addEventListener('click', function() {
+            btnAtualizar.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
                 loadPendenciasData();
             });
         }
@@ -119,6 +136,8 @@
         if (modal) {
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
+            // Garantir que os event listeners estão configurados
+            setupAtualizarButton();
             loadPendenciasData();
         }
     }
@@ -154,8 +173,30 @@
      * Carrega os dados do CSV
      */
     function loadPendenciasData() {
+        const btnAtualizar = document.getElementById('btn-atualizar-pendencias-internacoes');
+        
+        // Desabilitar botão durante o carregamento
+        if (btnAtualizar) {
+            btnAtualizar.disabled = true;
+            const originalText = btnAtualizar.innerHTML;
+            btnAtualizar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
+            
+            // Reabilitar após um tempo máximo (fallback)
+            setTimeout(() => {
+                if (btnAtualizar.disabled) {
+                    btnAtualizar.disabled = false;
+                    btnAtualizar.innerHTML = originalText;
+                }
+            }, 10000);
+        }
+        
         fetch('/api/pendencias-internacoes/load')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     pendenciasData = data.data;
@@ -163,13 +204,34 @@
                     renderPendenciasSpreadsheet();
                     isPendenciasEdited = false;
                     checkForPendenciasEdits();
+                    
+                    // Feedback visual de sucesso
+                    if (btnAtualizar) {
+                        const originalText = btnAtualizar.innerHTML;
+                        btnAtualizar.innerHTML = '<i class="fas fa-check"></i> Atualizado!';
+                        btnAtualizar.classList.add('glass-button-success');
+                        
+                        setTimeout(() => {
+                            btnAtualizar.innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar';
+                            btnAtualizar.classList.remove('glass-button-success');
+                        }, 2000);
+                    }
                 } else {
                     alert('Erro ao carregar dados: ' + (data.error || 'Erro desconhecido'));
                 }
             })
             .catch(error => {
                 console.error('Erro:', error);
-                alert('Erro ao carregar dados da planilha');
+                alert('Erro ao carregar dados da planilha: ' + error.message);
+            })
+            .finally(() => {
+                // Reabilitar botão
+                if (btnAtualizar) {
+                    btnAtualizar.disabled = false;
+                    if (!btnAtualizar.innerHTML.includes('Atualizado!')) {
+                        btnAtualizar.innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar';
+                    }
+                }
             });
     }
     
@@ -908,11 +970,20 @@
     
     // Inicializar quando o DOM estiver pronto
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initPendenciasModal);
+        document.addEventListener('DOMContentLoaded', function() {
+            initPendenciasModal();
+            // Garantir que o botão atualizar está configurado após um pequeno delay
+            setTimeout(setupAtualizarButton, 100);
+        });
     } else {
         initPendenciasModal();
+        // Garantir que o botão atualizar está configurado após um pequeno delay
+        setTimeout(setupAtualizarButton, 100);
     }
     
     // Exportar função para abrir o modal
     window.openPendenciasModal = openPendenciasModal;
+    
+    // Exportar função para configurar o botão atualizar (caso seja necessário chamar externamente)
+    window.setupPendenciasAtualizarButton = setupAtualizarButton;
 })();

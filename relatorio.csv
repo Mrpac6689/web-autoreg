@@ -55,3 +55,50 @@ data,hora,rotina,usuario,registros
 26/01/2026,23:41:09,Solicitar Internações,admin,56
 26/01/2026,23:48:28,Solicitar Internações,admin,56
 26/01/2026,23:55:03,Solicitar Internações,admin,56
+27/01/2026,07:46:28,Solicitar Internações,admin,56
+27/01/2026,07:51:49,Solicitar Internações,admin,56
+27/01/2026,07:58:17,Solicitar Internações,admin,56
+27/01/2026,08:01:49,Solicitar Internações,admin,56
+27/01/2026,08:27:44,Solicitar Internações,admin,56
+27/01/2026,09:45:31,Solicitar Tomografias,admin,8
+27/01/2026,11:42:10,Solicitar Internações,admin,26
+27/01/2026,14:32:37,Solicitar Tomografias,maria.jesus,12
+27/01/2026,14:49:28,Solicitar Tomografias,maria.jesus,4
+27/01/2026,14:55:17,Solicitar Tomografias,maria.jesus,1
+2026-01-27,16:15:22,Internar Pacientes,michel,6
+2026-01-27,16:15:23,Altas,michel,8
+2026-01-27,16:16:39,Internar Pacientes,michel,5
+2026-01-27,16:20:20,Altas,michel,10
+27/01/2026,17:00:51,Solicitar Tomografias,admin,47
+2026-01-28,09:00:27,Internar Pacientes,michel,7
+2026-01-28,09:06:01,Altas,michel,8
+28/01/2026,09:07:19,Solicitar Tomografias,maria.jesus,10
+28/01/2026,09:23:19,Solicitar Tomografias,maria.jesus,10
+28/01/2026,09:55:55,Solicitar Tomografias,maria.jesus,12
+28/01/2026,10:37:03,Solicitar Tomografias,maria.jesus,10
+28/01/2026,10:58:50,Solicitar Tomografias,maria.jesus,13
+28/01/2026,11:31:39,Solicitar Tomografias,maria.jesus,3
+28/01/2026,11:34:19,Solicitar Tomografias,maria.jesus,3
+2026-01-28,15:00:29,Internar Pacientes,michel,3
+2026-01-28,15:02:54,Altas,michel,2
+28/01/2026,15:36:07,Solicitar Tomografias,maria.jesus,14
+28/01/2026,15:51:33,Solicitar Tomografias,maria.jesus,6
+28/01/2026,16:06:43,Solicitar Tomografias,maria.jesus,16
+28/01/2026,16:22:07,Solicitar Tomografias,maria.jesus,12
+29/01/2026,08:24:34,Solicitar Internações,michel,25
+2026-01-29,09:00:28,Internar Pacientes,michel,3
+2026-01-29,09:03:07,Altas,michel,3
+29/01/2026,10:12:17,Solicitar Internações,michel,61
+29/01/2026,11:33:48,Solicitar Tomografias,maria.jesus,16
+29/01/2026,11:49:58,Solicitar Tomografias,maria.jesus,15
+29/01/2026,11:55:19,Solicitar Tomografias,maria.jesus,1
+29/01/2026,12:04:41,Solicitar Tomografias,maria.jesus,12
+29/01/2026,12:23:38,Solicitar Internações,michel,61
+29/01/2026,12:24:30,Solicitar Internações,michel,17
+29/01/2026,13:59:59,Solicitar Tomografias,maria.jesus,13
+2026-01-29,15:00:28,Internar Pacientes,michel,2
+2026-01-29,15:02:32,Altas,michel,2
+29/01/2026,15:19:24,Solicitar Tomografias,maria.jesus,20
+29/01/2026,17:57:09,Solicitar Tomografias,maria.jesus,2
+2026-01-30,09:05:28,Internar Pacientes,michel,1
+2026-01-30,09:07:18,Altas,michel,3

@@ -1,0 +1,152 @@
+<!-- Modal para Produção e Relatórios -->
+<div class="glass-modal" id="modal-producao-relatorios">
+    <div class="glass-modal-content modal-extra-large">
+        <div class="modal-header">
+            <h2><i class="fas fa-chart-bar"></i> Produção e Relatórios</h2>
+            <div class="modal-header-actions">
+                <button class="glass-modal-minimize" id="minimize-modal-producao-relatorios" title="Minimizar">
+                    <i class="fas fa-window-minimize"></i>
+                </button>
+                <button class="glass-modal-maximize" id="maximize-modal-producao-relatorios" title="Maximizar" style="display: none;">
+                    <i class="fas fa-window-maximize"></i>
+                </button>
+                <button class="glass-modal-close" id="close-modal-producao-relatorios">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="modal-body">
+            <!-- Botão para mostrar/esconder filtros -->
+            <div class="filtros-toggle-container">
+                <button type="button" class="glass-button-action" id="btn-toggle-filtros">
+                    <i class="fas fa-filter"></i> Mostrar Filtros
+                </button>
+            </div>
+            
+            <!-- Seção de Filtros -->
+            <div class="filtros-section" id="filtros-section" style="display: none;">
+                <h3 class="section-title"><i class="fas fa-filter"></i> Filtros</h3>
+                <div class="filtros-grid">
+                    <!-- Filtro de Período -->
+                    <div class="filtro-group">
+                        <label class="filtro-label">
+                            <i class="fas fa-calendar-alt"></i> Período
+                        </label>
+                        <div class="date-range-group">
+                            <input type="date" id="filtro-data-inicial" class="glass-input date-input">
+                            <span class="date-separator">até</span>
+                            <input type="date" id="filtro-data-final" class="glass-input date-input">
+                        </div>
+                    </div>
+                    
+                    <!-- Filtro de Usuários -->
+                    <div class="filtro-group">
+                        <label class="filtro-label">
+                            <i class="fas fa-users"></i> Usuários
+                        </label>
+                        <select id="filtro-usuarios" class="glass-input filtro-select" multiple>
+                            <option value="">Carregando...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Filtro de Módulos -->
+                    <div class="filtro-group">
+                        <label class="filtro-label">
+                            <i class="fas fa-cogs"></i> Módulos
+                        </label>
+                        <select id="filtro-modulos" class="glass-input filtro-select" multiple>
+                            <option value="">Carregando...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Botões de Ação dos Filtros -->
+                    <div class="filtro-actions">
+                        <button type="button" class="glass-button-action" id="btn-aplicar-filtros">
+                            <i class="fas fa-check"></i> Aplicar Filtros
+                        </button>
+                        <button type="button" class="glass-button-action" id="btn-limpar-filtros">
+                            <i class="fas fa-eraser"></i> Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Seção de Gráficos -->
+            <div class="graficos-section">
+                <!-- Gráfico 1: Produção por Módulo -->
+                <div class="grafico-container">
+                    <div class="grafico-header">
+                        <h3 class="grafico-title">
+                            <i class="fas fa-chart-bar"></i> Produção por Módulo
+                        </h3>
+                        <div class="grafico-info">
+                            <span class="info-text">Eixo Y: Módulos | Eixo X: Dias do mês</span>
+                        </div>
+                    </div>
+                    <div class="grafico-wrapper">
+                        <canvas id="grafico-modulo"></canvas>
+                    </div>
+                    <div class="grafico-tabela-container" id="tabela-modulo" style="display: none;">
+                        <!-- Tabela será inserida aqui via JS -->
+                    </div>
+                </div>
+                
+                <!-- Gráfico 2: Produção por Usuário -->
+                <div class="grafico-container">
+                    <div class="grafico-header">
+                        <h3 class="grafico-title">
+                            <i class="fas fa-user-chart"></i> Produção por Usuário
+                        </h3>
+                        <div class="grafico-info">
+                            <span class="info-text">Eixo X: Dias do mês | Eixo Y: Número de registros</span>
+                        </div>
+                    </div>
+                    <div class="grafico-wrapper">
+                        <canvas id="grafico-usuario"></canvas>
+                    </div>
+                    <div class="grafico-tabela-container" id="tabela-usuario" style="display: none;">
+                        <!-- Tabela será inserida aqui via JS -->
+                    </div>
+                </div>
+                
+                <!-- Gráfico 3: Produção por Período -->
+                <div class="grafico-container">
+                    <div class="grafico-header">
+                        <h3 class="grafico-title">
+                            <i class="fas fa-calendar-chart"></i> Produção por Período
+                        </h3>
+                        <div class="grafico-info">
+                            <span class="info-text">Eixo Y: Anos | Eixo X: Meses</span>
+                        </div>
+                    </div>
+                    <div class="grafico-wrapper">
+                        <canvas id="grafico-periodo"></canvas>
+                    </div>
+                    <div class="grafico-tabela-container" id="tabela-periodo" style="display: none;">
+                        <!-- Tabela será inserida aqui via JS -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mensagem de carregamento -->
+            <div id="loading-message" class="loading-message">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Carregando dados...</span>
+            </div>
+            
+            <!-- Mensagem de erro -->
+            <div id="error-message" class="error-message" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span id="error-text">Erro ao carregar dados</span>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="glass-button-action" id="btn-imprimir-relatorio">
+                <i class="fas fa-file-pdf"></i> Imprimir Relatório PDF
+            </button>
+            <button type="button" class="glass-button-action glass-button-danger" id="btn-fechar-producao-relatorios">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>

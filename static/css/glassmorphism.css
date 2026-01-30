@@ -420,11 +420,29 @@ body::before {
 }
 
 /* Modal específico para internacoes-solicitar - mais largo para botões ficarem na mesma linha */
-#modal-internacoes-solicitar .glass-modal-content {
+#modal-internacoes-solicitar .glass-modal-content,
+#modal-solicitar-internacoes .glass-modal-content {
     max-width: 98%;
     width: 98%;
     max-height: 98vh;
     min-width: 1400px;
+}
+
+/* Quando minimizado, remover min-width específico e qualquer largura customizada */
+#modal-internacoes-solicitar.minimized .glass-modal-content,
+#modal-solicitar-internacoes.minimized .glass-modal-content {
+    min-width: 400px !important;
+    max-width: 400px !important;
+    width: 400px !important;
+}
+
+/* Garantir que qualquer regra específica seja sobrescrita quando minimizado */
+.glass-modal:not(#modal-confirm-dialog).minimized .glass-modal-content.modal-extra-large,
+.glass-modal:not(#modal-confirm-dialog).minimized .glass-modal-content.modal-large,
+.glass-modal:not(#modal-confirm-dialog).minimized .glass-modal-content.modal-small {
+    min-width: 400px !important;
+    max-width: 400px !important;
+    width: 400px !important;
 }
 
 #modal-internacoes-solicitar .glass-modal-content .modal-body {
@@ -869,6 +887,91 @@ body::before {
 
 #modal-robo-spa:not(.minimized) .glass-modal-content {
     animation: maximizeModal 0.3s ease;
+}
+
+/* Estado minimizado genérico para todos os modais (exceto confirm_dialog) */
+.glass-modal:not(#modal-confirm-dialog).minimized {
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 0 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    pointer-events: none;
+    box-shadow: none !important;
+    top: auto !important;
+    left: auto !important;
+    width: auto !important;
+    height: auto !important;
+}
+
+/* Garantir que não há overlay quando minimizado */
+.glass-modal:not(#modal-confirm-dialog).minimized::before,
+.glass-modal:not(#modal-confirm-dialog).minimized::after {
+    display: none !important;
+    content: none !important;
+}
+
+.glass-modal:not(#modal-confirm-dialog).minimized .glass-modal-content {
+    max-width: 400px !important;
+    width: 400px !important;
+    min-width: 400px !important; /* Sobrescrever qualquer min-width específico */
+    max-height: 80px !important;
+    height: 80px !important;
+    margin: 0 !important;
+    animation: minimizeModal 0.3s ease;
+    pointer-events: auto;
+    z-index: 999998 !important; /* Abaixo dos botões flutuantes (999999) mas acima de outros elementos */
+    position: fixed !important;
+}
+
+.glass-modal:not(#modal-confirm-dialog).minimized .modal-body {
+    display: none !important;
+}
+
+.glass-modal:not(#modal-confirm-dialog).minimized .modal-footer {
+    display: none !important;
+}
+
+.glass-modal:not(#modal-confirm-dialog).minimized .modal-header {
+    padding: 15px 20px;
+    cursor: pointer;
+    margin: 0;
+    border-bottom: none;
+    pointer-events: auto;
+}
+
+.glass-modal:not(#modal-confirm-dialog).minimized .modal-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.glass-modal:not(#modal-confirm-dialog).minimized .modal-header h2 {
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.glass-modal:not(#modal-confirm-dialog).minimized .glass-modal-close {
+    display: flex !important;
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+}
+
+/* Garantir que botões no header minimizado sejam visíveis */
+.glass-modal:not(#modal-confirm-dialog).minimized .modal-header-actions {
+    display: flex !important;
+}
+
+.glass-modal:not(#modal-confirm-dialog):not(.minimized) .glass-modal-content {
+    animation: maximizeModal 0.3s ease;
+}
+
+/* Container de ações do header */
+.modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
 }
 
 @keyframes minimizeModal {

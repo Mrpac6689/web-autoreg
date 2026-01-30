@@ -23,8 +23,9 @@ import base64
 from urllib.parse import urlparse, urljoin, quote as url_quote, unquote
 import zipfile
 import tempfile
+import calendar
 from config import WORKDIR, PYTHONPATH, AUTOREGPATH, DOCKER_CONTAINER, USE_DOCKER, SECRET_KEY
-from auth import autenticar, listar_usuarios, adicionar_usuario, remover_usuario, alterar_senha, usuario_existe
+from auth import autenticar, listar_usuarios, adicionar_usuario, remover_usuario, alterar_senha, usuario_existe, obter_usuario_por_chave_api, gerar_chaves_para_usuarios_existentes
 
 # Desabilitar avisos de SSL não verificado
 warnings.filterwarnings('ignore', category=InsecureRequestWarning)
@@ -63,6 +64,15 @@ def jsonify_with_cors(data, status_code=200):
 
 # Aplicar CORS a todas as respostas
 app.after_request(adicionar_cors_headers)
+
+# Gerar chaves de API para usuários existentes na inicialização
+# Isso garante que todos os usuários tenham chaves, mesmo os criados antes desta funcionalidade
+try:
+    resultado = gerar_chaves_para_usuarios_existentes()
+    if resultado['geradas'] > 0:
+        print(f"[INFO] Geradas {resultado['geradas']} chaves de API para usuários existentes")
+except Exception as e:
+    print(f"[AVISO] Erro ao gerar chaves de API: {e}")
 
 # Configurar Flask-Login
 login_manager = LoginManager()
@@ -1912,6 +1922,102 @@ def registrar_relatorio(rotina: str, usuario: str, registros: int):
         return False
 
 
+@app.route('/api/externa/relatorio/registrar', methods=['POST', 'OPTIONS'])
+def api_externa_registrar_relatorio():
+    """API externa para registrar execução de rotina no relatório CSV usando chave de API"""
+    # Tratar CORS preflight
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-API-Key'
+        return response
+    
+    try:
+        # Obter chave de API do header ou do body
+        chave_api = request.headers.get('X-API-Key') or request.json.get('api_key') if request.json else None
+        
+        if not chave_api:
+            response = jsonify({
+                'success': False,
+                'error': 'Chave de API não fornecida. Use o header X-API-Key ou o campo api_key no body.'
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 401
+        
+        # Validar chave de API e obter usuário
+        usuario_data = obter_usuario_por_chave_api(chave_api)
+        if not usuario_data:
+            response = jsonify({
+                'success': False,
+                'error': 'Chave de API inválida ou usuário inativo'
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 401
+        
+        # Obter dados do body
+        data = request.json or {}
+        rotina = data.get('rotina', '').strip()
+        registros = data.get('registros', 0)
+        
+        # Validar dados
+        if not rotina:
+            response = jsonify({
+                'success': False,
+                'error': 'Campo "rotina" é obrigatório'
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 400
+        
+        try:
+            registros = int(registros)
+            if registros < 0:
+                response = jsonify({
+                    'success': False,
+                    'error': 'Número de registros deve ser positivo ou zero'
+                })
+                response.headers['Access-Control-Allow-Origin'] = '*'
+                return response, 400
+        except (ValueError, TypeError):
+            response = jsonify({
+                'success': False,
+                'error': 'Campo "registros" deve ser um número inteiro'
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 400
+        
+        # Registrar no CSV usando o username do usuário autenticado
+        sucesso = registrar_relatorio(rotina, usuario_data['username'], registros)
+        
+        if sucesso:
+            response = jsonify({
+                'success': True,
+                'message': 'Relatório registrado com sucesso',
+                'data': {
+                    'rotina': rotina,
+                    'registros': registros,
+                    'usuario': usuario_data['username']
+                }
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response
+        else:
+            response = jsonify({
+                'success': False,
+                'error': 'Erro ao registrar relatório'
+            })
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response, 500
+            
+    except Exception as e:
+        response = jsonify({
+            'success': False,
+            'error': str(e)
+        })
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+
 @app.route('/api/relatorio/registrar', methods=['POST'])
 @login_required
 def api_registrar_relatorio():
@@ -1953,6 +2059,243 @@ def api_registrar_relatorio():
         return jsonify({
             'success': False,
             'error': str(e)
+            }), 500
+
+
+@app.route('/api/producao-relatorios/dados', methods=['GET'])
+@login_required
+def get_producao_relatorios_dados():
+    """API para obter dados processados do relatorio.csv para os gráficos"""
+    try:
+        relatorio_path = Path(__file__).parent / 'relatorio.csv'
+        
+        # Carregar mapeamento username -> nome
+        usuarios_data = listar_usuarios()
+        username_to_nome = {u['username']: u['nome'] for u in usuarios_data}
+        nome_to_username = {u['nome']: u['username'] for u in usuarios_data}
+        
+        # Parâmetros de filtro
+        data_inicial = request.args.get('data_inicial', '')
+        data_final = request.args.get('data_final', '')
+        usuarios_filtro = request.args.getlist('usuarios[]')  # Recebe nomes agora
+        modulos = request.args.getlist('modulos[]')
+        
+        # Converter nomes de usuário para usernames para filtro
+        usuarios_filtro_usernames = []
+        for nome in usuarios_filtro:
+            if nome in nome_to_username:
+                usuarios_filtro_usernames.append(nome_to_username[nome])
+            elif nome in username_to_nome:  # Se já for username, manter
+                usuarios_filtro_usernames.append(nome)
+        
+        # Ler CSV
+        dados_raw = []
+        if relatorio_path.exists():
+            with open(relatorio_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    dados_raw.append(row)
+        
+        # Processar e filtrar dados
+        dados_filtrados = []
+        usuarios_unicos = set()
+        modulos_unicos = set()
+        
+        for registro in dados_raw:
+            # Converter data de DD/MM/YYYY ou YYYY-MM-DD para datetime
+            data_str = registro.get('data', '').strip()
+            data_registro = None
+            try:
+                # Tentar formato DD/MM/YYYY primeiro (formato padrão)
+                data_registro = datetime.strptime(data_str, '%d/%m/%Y')
+            except:
+                try:
+                    # Tentar formato YYYY-MM-DD (formato alternativo)
+                    data_registro = datetime.strptime(data_str, '%Y-%m-%d')
+                except:
+                    # Se nenhum formato funcionar, pular este registro
+                    continue
+            
+            # Filtrar por período
+            if data_inicial:
+                try:
+                    data_ini = datetime.strptime(data_inicial, '%Y-%m-%d')
+                    if data_registro < data_ini:
+                        continue
+                except:
+                    pass
+            
+            if data_final:
+                try:
+                    data_fim = datetime.strptime(data_final, '%Y-%m-%d')
+                    if data_registro > data_fim:
+                        continue
+                except:
+                    pass
+            
+            # Filtrar por usuários (usando username do CSV)
+            usuario_username = registro.get('usuario', '').strip()
+            if usuarios_filtro_usernames and usuario_username not in usuarios_filtro_usernames:
+                continue
+            
+            # Filtrar por módulos
+            rotina = registro.get('rotina', '').strip()
+            if modulos and rotina not in modulos:
+                continue
+            
+            # Coletar usuários (nomes) e módulos únicos
+            if usuario_username and usuario_username in username_to_nome:
+                usuarios_unicos.add(username_to_nome[usuario_username])
+            elif usuario_username:
+                usuarios_unicos.add(usuario_username)  # Fallback se não encontrar nome
+            if rotina:
+                modulos_unicos.add(rotina)
+            
+            dados_filtrados.append({
+                'data': registro.get('data', ''),
+                'hora': registro.get('hora', ''),
+                'rotina': rotina,
+                'usuario': usuario_username,  # Manter username para processamento interno
+                'usuario_nome': username_to_nome.get(usuario_username, usuario_username),  # Nome para exibição
+                'registros': int(registro.get('registros', 0) or 0)
+            })
+        
+        # Processar dados para gráficos
+        # 1. Produção por Módulo (agrupar por rotina e dia do mês atual)
+        hoje = datetime.now()
+        mes_atual = hoje.month
+        ano_atual = hoje.year
+        
+        producao_modulo = {}
+        producao_usuario = {}
+        producao_periodo = {}
+        
+        for registro in dados_filtrados:
+            try:
+                # Converter data para datetime (aceitar ambos os formatos)
+                data_str = registro.get('data', '').strip()
+                data_reg = None
+                try:
+                    # Tentar formato DD/MM/YYYY primeiro (formato padrão)
+                    data_reg = datetime.strptime(data_str, '%d/%m/%Y')
+                except:
+                    try:
+                        # Tentar formato YYYY-MM-DD (formato alternativo)
+                        data_reg = datetime.strptime(data_str, '%Y-%m-%d')
+                    except:
+                        # Se nenhum formato funcionar, pular este registro
+                        continue
+                
+                rotina = registro['rotina']
+                usuario_username = registro['usuario']  # Username do CSV
+                usuario_nome = registro.get('usuario_nome', usuario_username)  # Nome para exibição
+                registros = registro['registros']
+                
+                # Produção por Módulo (mês atual)
+                if data_reg.month == mes_atual and data_reg.year == ano_atual:
+                    dia = data_reg.day
+                    if rotina not in producao_modulo:
+                        producao_modulo[rotina] = {}
+                    producao_modulo[rotina][dia] = producao_modulo[rotina].get(dia, 0) + registros
+                
+                # Produção por Usuário (mês atual) - usar nome ao invés de username
+                if data_reg.month == mes_atual and data_reg.year == ano_atual:
+                    dia = data_reg.day
+                    # Usar nome do usuário como chave
+                    if usuario_nome not in producao_usuario:
+                        producao_usuario[usuario_nome] = {}
+                    producao_usuario[usuario_nome][dia] = producao_usuario[usuario_nome].get(dia, 0) + registros
+                
+                # Produção por Período (todos os dados)
+                ano = data_reg.year
+                mes = data_reg.month
+                chave_periodo = f"{ano}-{mes:02d}"
+                if chave_periodo not in producao_periodo:
+                    producao_periodo[chave_periodo] = {
+                        'ano': ano,
+                        'mes': mes,
+                        'registros': 0
+                    }
+                producao_periodo[chave_periodo]['registros'] += registros
+                
+            except Exception as e:
+                # Log do erro mas continua processando outros registros
+                print(f"Erro ao processar registro para gráficos: {e}")
+                continue
+        
+        # Preparar dados para resposta
+        # Dias do mês atual (todos os dias do mês)
+        ultimo_dia_mes = calendar.monthrange(ano_atual, mes_atual)[1]
+        dias_mes = list(range(1, ultimo_dia_mes + 1))
+        
+        # Dados por módulo
+        dados_modulo = {
+            'labels': dias_mes,
+            'datasets': []
+        }
+        if producao_modulo:
+            for rotina in sorted(producao_modulo.keys()):
+                dados = [producao_modulo[rotina].get(dia, 0) for dia in dias_mes]
+                dados_modulo['datasets'].append({
+                    'label': rotina,
+                    'data': dados
+                })
+        
+        # Dados por usuário (já está usando nomes)
+        dados_usuario = {
+            'labels': dias_mes,
+            'datasets': []
+        }
+        if producao_usuario:
+            # producao_usuario já usa nomes como chave
+            for nome_usuario in sorted(producao_usuario.keys()):
+                dados = [producao_usuario[nome_usuario].get(dia, 0) for dia in dias_mes]
+                dados_usuario['datasets'].append({
+                    'label': nome_usuario,
+                    'data': dados
+                })
+        
+        # Dados por período
+        periodos_ordenados = sorted(producao_periodo.keys())
+        anos_unicos = sorted(set(p['ano'] for p in producao_periodo.values()))
+        meses_labels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+        
+        dados_periodo = {
+            'labels': meses_labels,
+            'datasets': []
+        }
+        for ano in anos_unicos:
+            dados_ano = []
+            for mes in range(1, 13):
+                chave = f"{ano}-{mes:02d}"
+                if chave in producao_periodo:
+                    dados_ano.append(producao_periodo[chave]['registros'])
+                else:
+                    dados_ano.append(0)
+            dados_periodo['datasets'].append({
+                'label': str(ano),
+                'data': dados_ano
+            })
+        
+        return jsonify({
+            'success': True,
+            'dados_modulo': dados_modulo,
+            'dados_usuario': dados_usuario,
+            'dados_periodo': dados_periodo,
+            'usuarios_disponiveis': sorted(list(usuarios_unicos)),
+            'modulos_disponiveis': sorted(list(modulos_unicos)),
+            'total_registros': len(dados_filtrados)
+        })
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Erro em get_producao_relatorios_dados: {e}")
+        print(error_trace)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': error_trace
         }), 500
 
 
