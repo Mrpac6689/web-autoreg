@@ -2160,127 +2160,182 @@ def get_producao_relatorios_dados():
                 'registros': int(registro.get('registros', 0) or 0)
             })
         
-        # Processar dados para gráficos
-        # 1. Produção por Módulo (agrupar por rotina e dia do mês atual)
+        # Período efetivo para os gráficos (usar filtro ou mês atual)
         hoje = datetime.now()
-        mes_atual = hoje.month
-        ano_atual = hoje.year
-        
+        if data_inicial and data_final:
+            try:
+                data_ini = datetime.strptime(data_inicial, '%Y-%m-%d')
+                data_fim = datetime.strptime(data_final, '%Y-%m-%d')
+                ano_ini, mes_ini = data_ini.year, data_ini.month
+                ano_fim, mes_fim = data_fim.year, data_fim.month
+            except Exception:
+                ano_ini, mes_ini = hoje.year, hoje.month
+                ano_fim, mes_fim = hoje.year, hoje.month
+                data_ini = datetime(hoje.year, hoje.month, 1)
+                data_fim = hoje
+        else:
+            ano_ini, mes_ini = hoje.year, hoje.month
+            ano_fim, mes_fim = hoje.year, hoje.month
+            data_ini = datetime(hoje.year, hoje.month, 1)
+            data_fim = hoje
+
+        # Período cobre um único mês ou múltiplos meses?
+        um_mes_only = (ano_ini == ano_fim and mes_ini == mes_fim)
+        meses_labels_pt = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
         producao_modulo = {}
         producao_usuario = {}
+        producao_modulo_usuario = {}  # (rotina, usuario_nome) -> dia ou (ano,mes) -> total
         producao_periodo = {}
-        
+
         for registro in dados_filtrados:
             try:
-                # Converter data para datetime (aceitar ambos os formatos)
                 data_str = registro.get('data', '').strip()
-                data_reg = None
                 try:
-                    # Tentar formato DD/MM/YYYY primeiro (formato padrão)
                     data_reg = datetime.strptime(data_str, '%d/%m/%Y')
-                except:
+                except Exception:
                     try:
-                        # Tentar formato YYYY-MM-DD (formato alternativo)
                         data_reg = datetime.strptime(data_str, '%Y-%m-%d')
-                    except:
-                        # Se nenhum formato funcionar, pular este registro
+                    except Exception:
                         continue
-                
+
                 rotina = registro['rotina']
-                usuario_username = registro['usuario']  # Username do CSV
-                usuario_nome = registro.get('usuario_nome', usuario_username)  # Nome para exibição
+                usuario_username = registro['usuario']
+                usuario_nome = registro.get('usuario_nome', usuario_username)
                 registros = registro['registros']
-                
-                # Produção por Módulo (mês atual)
-                if data_reg.month == mes_atual and data_reg.year == ano_atual:
-                    dia = data_reg.day
+                ano, mes, dia = data_reg.year, data_reg.month, data_reg.day
+
+                # Dentro do período filtrado?
+                if data_reg < data_ini or data_reg > data_fim:
+                    continue
+
+                if um_mes_only:
+                    # Um único mês: agrupar por dia
                     if rotina not in producao_modulo:
                         producao_modulo[rotina] = {}
                     producao_modulo[rotina][dia] = producao_modulo[rotina].get(dia, 0) + registros
-                
-                # Produção por Usuário (mês atual) - usar nome ao invés de username
-                if data_reg.month == mes_atual and data_reg.year == ano_atual:
-                    dia = data_reg.day
-                    # Usar nome do usuário como chave
                     if usuario_nome not in producao_usuario:
                         producao_usuario[usuario_nome] = {}
                     producao_usuario[usuario_nome][dia] = producao_usuario[usuario_nome].get(dia, 0) + registros
-                
-                # Produção por Período (todos os dados)
-                ano = data_reg.year
-                mes = data_reg.month
+                    chave_mod_usr = (rotina, usuario_nome)
+                    if chave_mod_usr not in producao_modulo_usuario:
+                        producao_modulo_usuario[chave_mod_usr] = {}
+                    producao_modulo_usuario[chave_mod_usr][dia] = producao_modulo_usuario[chave_mod_usr].get(dia, 0) + registros
+                else:
+                    # Múltiplos meses: agrupar por (ano, mes)
+                    chave_mes = (ano, mes)
+                    if rotina not in producao_modulo:
+                        producao_modulo[rotina] = {}
+                    producao_modulo[rotina][chave_mes] = producao_modulo[rotina].get(chave_mes, 0) + registros
+                    if usuario_nome not in producao_usuario:
+                        producao_usuario[usuario_nome] = {}
+                    producao_usuario[usuario_nome][chave_mes] = producao_usuario[usuario_nome].get(chave_mes, 0) + registros
+                    chave_mod_usr = (rotina, usuario_nome)
+                    if chave_mod_usr not in producao_modulo_usuario:
+                        producao_modulo_usuario[chave_mod_usr] = {}
+                    producao_modulo_usuario[chave_mod_usr][chave_mes] = producao_modulo_usuario[chave_mod_usr].get(chave_mes, 0) + registros
+
                 chave_periodo = f"{ano}-{mes:02d}"
                 if chave_periodo not in producao_periodo:
-                    producao_periodo[chave_periodo] = {
-                        'ano': ano,
-                        'mes': mes,
-                        'registros': 0
-                    }
+                    producao_periodo[chave_periodo] = {'ano': ano, 'mes': mes, 'registros': 0}
                 producao_periodo[chave_periodo]['registros'] += registros
-                
+
             except Exception as e:
-                # Log do erro mas continua processando outros registros
                 print(f"Erro ao processar registro para gráficos: {e}")
                 continue
-        
-        # Preparar dados para resposta
-        # Dias do mês atual (todos os dias do mês)
-        ultimo_dia_mes = calendar.monthrange(ano_atual, mes_atual)[1]
-        dias_mes = list(range(1, ultimo_dia_mes + 1))
-        
+
+        # Lista de (ano, mes) no intervalo para labels de múltiplos meses
+        def meses_no_intervalo(ani, mi, anf, mf):
+            out = []
+            a, m = ani, mi
+            while (a, m) <= (anf, mf):
+                out.append((a, m))
+                if m == 12:
+                    a, m = a + 1, 1
+                else:
+                    m += 1
+            return out
+
+        if um_mes_only:
+            ano_ref, mes_ref = ano_ini, mes_ini
+            ultimo_dia_mes = calendar.monthrange(ano_ref, mes_ref)[1]
+            labels_modulo = list(range(1, ultimo_dia_mes + 1))
+            labels_usuario = list(range(1, ultimo_dia_mes + 1))
+            tipo_eixo = 'dia'
+        else:
+            lista_meses = meses_no_intervalo(ano_ini, mes_ini, ano_fim, mes_fim)
+            labels_modulo = [f"{meses_labels_pt[m - 1]}/{a}" for a, m in lista_meses]
+            labels_usuario = [f"{meses_labels_pt[m - 1]}/{a}" for a, m in lista_meses]
+            tipo_eixo = 'mes'
+            chaves_ordenadas = lista_meses
+
         # Dados por módulo
-        dados_modulo = {
-            'labels': dias_mes,
-            'datasets': []
-        }
+        dados_modulo = {'labels': labels_modulo, 'datasets': [], 'tipo_eixo': tipo_eixo}
+        if producao_modulo:
+            if um_mes_only:
+                for rotina in sorted(producao_modulo.keys()):
+                    dados = [producao_modulo[rotina].get(dia, 0) for dia in labels_modulo]
+                    dados_modulo['datasets'].append({'label': rotina, 'data': dados})
+            else:
+                for rotina in sorted(producao_modulo.keys()):
+                    dados = [producao_modulo[rotina].get(chave, 0) for chave in chaves_ordenadas]
+                    dados_modulo['datasets'].append({'label': rotina, 'data': dados})
+
+        # Dados por usuário
+        dados_usuario = {'labels': labels_usuario, 'datasets': [], 'tipo_eixo': tipo_eixo}
+        if producao_usuario:
+            if um_mes_only:
+                for nome_usuario in sorted(producao_usuario.keys()):
+                    dados = [producao_usuario[nome_usuario].get(dia, 0) for dia in labels_usuario]
+                    dados_usuario['datasets'].append({'label': nome_usuario, 'data': dados})
+            else:
+                for nome_usuario in sorted(producao_usuario.keys()):
+                    dados = [producao_usuario[nome_usuario].get(chave, 0) for chave in chaves_ordenadas]
+                    dados_usuario['datasets'].append({'label': nome_usuario, 'data': dados})
+
+        # Dados por período: eixo X = meses no intervalo (ex: fev/2026, mar/2026)
+        if um_mes_only:
+            lista_meses_periodo = [(ano_ini, mes_ini)]
+        else:
+            lista_meses_periodo = meses_no_intervalo(ano_ini, mes_ini, ano_fim, mes_fim)
+        labels_periodo = [f"{meses_labels_pt[m - 1]}/{a}" for a, m in lista_meses_periodo]
+        dados_periodo = {'labels': labels_periodo, 'datasets': []}
+        # Um dataset "Total" com totais por mês no intervalo
+        totais_por_mes = [producao_periodo.get(f"{a}-{m:02d}", {}).get('registros', 0) for a, m in lista_meses_periodo]
+        dados_periodo['datasets'].append({'label': 'Total', 'data': totais_por_mes})
+
+        # Resumo por módulo: total no período por módulo (dia x módulo, sem usuário)
+        dados_modulo_resumo = {'labels': [], 'data': []}
         if producao_modulo:
             for rotina in sorted(producao_modulo.keys()):
-                dados = [producao_modulo[rotina].get(dia, 0) for dia in dias_mes]
-                dados_modulo['datasets'].append({
-                    'label': rotina,
-                    'data': dados
-                })
-        
-        # Dados por usuário (já está usando nomes)
-        dados_usuario = {
-            'labels': dias_mes,
-            'datasets': []
-        }
-        if producao_usuario:
-            # producao_usuario já usa nomes como chave
-            for nome_usuario in sorted(producao_usuario.keys()):
-                dados = [producao_usuario[nome_usuario].get(dia, 0) for dia in dias_mes]
-                dados_usuario['datasets'].append({
-                    'label': nome_usuario,
-                    'data': dados
-                })
-        
-        # Dados por período
-        periodos_ordenados = sorted(producao_periodo.keys())
-        anos_unicos = sorted(set(p['ano'] for p in producao_periodo.values()))
-        meses_labels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-        
-        dados_periodo = {
-            'labels': meses_labels,
-            'datasets': []
-        }
-        for ano in anos_unicos:
-            dados_ano = []
-            for mes in range(1, 13):
-                chave = f"{ano}-{mes:02d}"
-                if chave in producao_periodo:
-                    dados_ano.append(producao_periodo[chave]['registros'])
-                else:
-                    dados_ano.append(0)
-            dados_periodo['datasets'].append({
-                'label': str(ano),
-                'data': dados_ano
-            })
+                total = sum(producao_modulo[rotina].values())
+                dados_modulo_resumo['labels'].append(rotina)
+                dados_modulo_resumo['data'].append(total)
+
+        # Detalhada por usuário: módulo x usuário, eixo X = dias (ou meses)
+        dados_usuario_detalhado = {'labels': labels_modulo, 'datasets': [], 'tipo_eixo': tipo_eixo}
+        if producao_modulo_usuario:
+            if um_mes_only:
+                for (rotina, nome_usr) in sorted(producao_modulo_usuario.keys()):
+                    dados = [producao_modulo_usuario[(rotina, nome_usr)].get(d, 0) for d in labels_modulo]
+                    dados_usuario_detalhado['datasets'].append({
+                        'label': f"{rotina} — {nome_usr}",
+                        'data': dados
+                    })
+            else:
+                for (rotina, nome_usr) in sorted(producao_modulo_usuario.keys()):
+                    dados = [producao_modulo_usuario[(rotina, nome_usr)].get(chave, 0) for chave in chaves_ordenadas]
+                    dados_usuario_detalhado['datasets'].append({
+                        'label': f"{rotina} — {nome_usr}",
+                        'data': dados
+                    })
         
         return jsonify({
             'success': True,
+            'dados_modulo_resumo': dados_modulo_resumo,
             'dados_modulo': dados_modulo,
             'dados_usuario': dados_usuario,
+            'dados_usuario_detalhado': dados_usuario_detalhado,
             'dados_periodo': dados_periodo,
             'usuarios_disponiveis': sorted(list(usuarios_unicos)),
             'modulos_disponiveis': sorted(list(modulos_unicos)),

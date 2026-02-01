@@ -73,14 +73,32 @@
             
             <!-- Seção de Gráficos -->
             <div class="graficos-section">
-                <!-- Gráfico 1: Produção por Módulo -->
+                <!-- Gráfico 1: Produção por Módulo (resumo: total por módulo) -->
                 <div class="grafico-container">
                     <div class="grafico-header">
                         <h3 class="grafico-title">
-                            <i class="fas fa-chart-bar"></i> Produção por Módulo
+                            <i class="fas fa-chart-pie"></i> Produção por Módulo
                         </h3>
                         <div class="grafico-info">
-                            <span class="info-text">Eixo Y: Módulos | Eixo X: Dias do mês</span>
+                            <span class="info-text">Total no período por módulo (sem separar por usuário)</span>
+                        </div>
+                    </div>
+                    <div class="grafico-wrapper">
+                        <canvas id="grafico-modulo-resumo"></canvas>
+                    </div>
+                    <div class="grafico-tabela-container" id="tabela-modulo-resumo" style="display: none;">
+                        <!-- Tabela resumo Módulo | Total -->
+                    </div>
+                </div>
+                
+                <!-- Gráfico 2: Produção Detalhada por Módulo (dia/mês x módulo) -->
+                <div class="grafico-container">
+                    <div class="grafico-header">
+                        <h3 class="grafico-title">
+                            <i class="fas fa-chart-bar"></i> Produção Detalhada por Módulo
+                        </h3>
+                        <div class="grafico-info">
+                            <span class="info-text" id="info-text-modulo">Eixo X: Período (dias ou meses)</span>
                         </div>
                     </div>
                     <div class="grafico-wrapper">
@@ -91,14 +109,14 @@
                     </div>
                 </div>
                 
-                <!-- Gráfico 2: Produção por Usuário -->
+                <!-- Gráfico 3: Produção por Usuário -->
                 <div class="grafico-container">
                     <div class="grafico-header">
                         <h3 class="grafico-title">
                             <i class="fas fa-user-chart"></i> Produção por Usuário
                         </h3>
                         <div class="grafico-info">
-                            <span class="info-text">Eixo X: Dias do mês | Eixo Y: Número de registros</span>
+                            <span class="info-text" id="info-text-usuario">Eixo X: Período | Eixo Y: Registros</span>
                         </div>
                     </div>
                     <div class="grafico-wrapper">
@@ -109,14 +127,32 @@
                     </div>
                 </div>
                 
-                <!-- Gráfico 3: Produção por Período -->
+                <!-- Gráfico 4: Produção Detalhada por Usuário (módulo x usuário, eixo X = dias) -->
+                <div class="grafico-container">
+                    <div class="grafico-header">
+                        <h3 class="grafico-title">
+                            <i class="fas fa-chart-line"></i> Produção Detalhada por Usuário
+                        </h3>
+                        <div class="grafico-info">
+                            <span class="info-text" id="info-text-usuario-detalhado">Eixo X: Dias do mês | Módulo — Usuário</span>
+                        </div>
+                    </div>
+                    <div class="grafico-wrapper">
+                        <canvas id="grafico-usuario-detalhado"></canvas>
+                    </div>
+                    <div class="grafico-tabela-container" id="tabela-usuario-detalhado" style="display: none;">
+                        <!-- Tabela será inserida aqui via JS -->
+                    </div>
+                </div>
+                
+                <!-- Gráfico 5: Produção por Período -->
                 <div class="grafico-container">
                     <div class="grafico-header">
                         <h3 class="grafico-title">
                             <i class="fas fa-calendar-chart"></i> Produção por Período
                         </h3>
                         <div class="grafico-info">
-                            <span class="info-text">Eixo Y: Anos | Eixo X: Meses</span>
+                            <span class="info-text" id="info-text-periodo">Eixo X: Meses do período | Eixo Y: Total</span>
                         </div>
                     </div>
                     <div class="grafico-wrapper">

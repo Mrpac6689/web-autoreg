@@ -85,20 +85,34 @@ data,hora,rotina,usuario,registros
 28/01/2026,15:51:33,Solicitar Tomografias,maria.jesus,6
 28/01/2026,16:06:43,Solicitar Tomografias,maria.jesus,16
 28/01/2026,16:22:07,Solicitar Tomografias,maria.jesus,12
-29/01/2026,08:24:34,Solicitar Internações,michel,25
-2026-01-29,09:00:28,Internar Pacientes,michel,3
-2026-01-29,09:03:07,Altas,michel,3
-29/01/2026,10:12:17,Solicitar Internações,michel,61
-29/01/2026,11:33:48,Solicitar Tomografias,maria.jesus,16
-29/01/2026,11:49:58,Solicitar Tomografias,maria.jesus,15
-29/01/2026,11:55:19,Solicitar Tomografias,maria.jesus,1
-29/01/2026,12:04:41,Solicitar Tomografias,maria.jesus,12
-29/01/2026,12:23:38,Solicitar Internações,michel,61
-29/01/2026,12:24:30,Solicitar Internações,michel,17
-29/01/2026,13:59:59,Solicitar Tomografias,maria.jesus,13
-2026-01-29,15:00:28,Internar Pacientes,michel,2
-2026-01-29,15:02:32,Altas,michel,2
-29/01/2026,15:19:24,Solicitar Tomografias,maria.jesus,20
-29/01/2026,17:57:09,Solicitar Tomografias,maria.jesus,2
-2026-01-30,09:05:28,Internar Pacientes,michel,1
-2026-01-30,09:07:18,Altas,michel,3
+
+30/01/2026,10:22:59,Solicitar Tomografias,nyele,16
+30/01/2026,10:52:15,Solicitar Tomografias,nyele,25
+30/01/2026,11:47:36,Solicitar Tomografias,nyele,29
+30/01/2026,12:38:04,Solicitar Tomografias,nyele,23
+30/01/2026,13:49:27,Solicitar Tomografias,nyele,11
+30/01/2026,14:19:23,Solicitar Tomografias,nyele,2
+30/01/2026,14:23:49,Solicitar Tomografias,nyele,2
+30/01/2026,14:30:02,Solicitar Tomografias,admin,2
+2026-01-30,15:00:31,Internar Pacientes,michel,78
+30/01/2026,15:17:59,Solicitar Tomografias,nyele,14
+2026-01-30,15:23:40,Altas,michel,33
+30/01/2026,15:38:40,Solicitar Tomografias,nyele,12
+30/01/2026,15:54:04,Solicitar Tomografias,nyele,14
+30/01/2026,16:44:08,Solicitar Tomografias,nyele,17
+31/01/2026,08:46:41,Solicitar Tomografias,nyele,12
+2026-01-31,09:00:26,Internar Pacientes,michel,17
+2026-01-31,09:06:22,Altas,michel,34
+31/01/2026,09:42:33,Solicitar Tomografias,nyele,18
+31/01/2026,10:23:00,Solicitar Tomografias,nyele,27
+31/01/2026,10:44:54,Solicitar Tomografias,nyele,18
+2026-01-31,15:00:28,Internar Pacientes,michel,16
+2026-01-31,15:06:07,Altas,michel,34
+01/02/2026,08:57:10,Solicitar Tomografias,nyele,13
+2026-02-01,09:00:25,Internar Pacientes,michel,16
+2026-02-01,09:06:04,Altas,michel,34
+01/02/2026,09:44:11,Solicitar Tomografias,nyele,23
+01/02/2026,09:44:20,Altas,michel,34
+01/02/2026,10:33:58,Altas,michel,34
+01/02/2026,11:03:33,Internar Pacientes,michel,15
+01/02/2026,11:17:59,Altas,michel,7

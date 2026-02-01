@@ -3,8 +3,10 @@
  */
 
 // Variáveis globais
+let graficoModuloResumo = null;
 let graficoModulo = null;
 let graficoUsuario = null;
+let graficoUsuarioDetalhado = null;
 let graficoPeriodo = null;
 let dadosAtuais = null;
 let filtrosAtivos = {
@@ -312,19 +314,123 @@ function limparFiltros() {
 function atualizarGraficos() {
     if (!dadosAtuais) return;
     
+    atualizarGraficoModuloResumo();
     atualizarGraficoModulo();
     atualizarGraficoUsuario();
+    atualizarGraficoUsuarioDetalhado();
     atualizarGraficoPeriodo();
+    atualizarTextosInfoGraficos();
 }
 
 /**
- * Atualiza gráfico de produção por módulo
+ * Atualiza os textos informativos dos gráficos conforme tipo de eixo (dia vs mês)
+ */
+function atualizarTextosInfoGraficos() {
+    const infoModulo = document.getElementById('info-text-modulo');
+    const infoUsuario = document.getElementById('info-text-usuario');
+    if (dadosAtuais && dadosAtuais.dados_modulo) {
+        const tipo = dadosAtuais.dados_modulo.tipo_eixo || 'dia';
+        if (infoModulo) {
+            infoModulo.textContent = tipo === 'mes'
+                ? 'Eixo X: Meses (ex: Fev/2026) | Eixo Y: Registros por módulo'
+                : 'Eixo X: Dias do mês | Eixo Y: Registros por módulo';
+        }
+    }
+    if (dadosAtuais && dadosAtuais.dados_usuario) {
+        const tipo = dadosAtuais.dados_usuario.tipo_eixo || 'dia';
+        if (infoUsuario) {
+            infoUsuario.textContent = tipo === 'mes'
+                ? 'Eixo X: Meses (ex: Fev/2026) | Eixo Y: Registros por usuário'
+                : 'Eixo X: Dias do mês | Eixo Y: Registros por usuário';
+        }
+    }
+    const infoUsuarioDetalhado = document.getElementById('info-text-usuario-detalhado');
+    if (dadosAtuais && dadosAtuais.dados_usuario_detalhado) {
+        const tipo = dadosAtuais.dados_usuario_detalhado.tipo_eixo || 'dia';
+        if (infoUsuarioDetalhado) {
+            infoUsuarioDetalhado.textContent = tipo === 'mes'
+                ? 'Eixo X: Meses (ex: Fev/2026) | Módulo — Usuário'
+                : 'Eixo X: Dias do mês | Módulo — Usuário';
+        }
+    }
+}
+
+/**
+ * Formata label do eixo X: dia (número) ou mês (ex: Fev/2026)
+ */
+function formatarLabelEixoX(labels, tipoEixo) {
+    if (tipoEixo === 'mes') {
+        return labels; // já vem "Fev/2026", "Mar/2026", etc.
+    }
+    return labels.map(d => `Dia ${d}`);
+}
+
+/**
+ * Atualiza gráfico de produção por módulo (resumo: total por módulo, sem usuário)
+ */
+function atualizarGraficoModuloResumo() {
+    const ctx = document.getElementById('grafico-modulo-resumo');
+    if (!ctx || !dadosAtuais.dados_modulo_resumo) return;
+    
+    const dados = dadosAtuais.dados_modulo_resumo;
+    if (!dados.labels || dados.labels.length === 0) return;
+    
+    if (graficoModuloResumo) {
+        graficoModuloResumo.destroy();
+    }
+    
+    graficoModuloResumo = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: dados.labels,
+            datasets: [{
+                label: 'Total no período',
+                data: dados.data,
+                backgroundColor: dados.data.map((_, i) => coresGraficos[i % coresGraficos.length]),
+                borderColor: dados.data.map((_, i) => coresGraficos[i % coresGraficos.length].replace('0.8', '1')),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    borderWidth: 1
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: 'rgba(255, 255, 255, 0.7)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                y: {
+                    ticks: { color: 'rgba(255, 255, 255, 0.7)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Atualiza gráfico de produção por módulo (detalhada: dia/mês x módulo)
  */
 function atualizarGraficoModulo() {
     const ctx = document.getElementById('grafico-modulo');
     if (!ctx || !dadosAtuais.dados_modulo) return;
     
     const dados = dadosAtuais.dados_modulo;
+    const tipoEixo = dados.tipo_eixo || 'dia';
+    const labelsFormatados = formatarLabelEixoX(dados.labels, tipoEixo);
     
     if (graficoModulo) {
         graficoModulo.destroy();
@@ -333,7 +439,7 @@ function atualizarGraficoModulo() {
     graficoModulo = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: dados.labels.map(d => `Dia ${d}`),
+            labels: labelsFormatados,
             datasets: dados.datasets.map((ds, idx) => ({
                 label: ds.label,
                 data: ds.data,
@@ -394,6 +500,8 @@ function atualizarGraficoUsuario() {
     if (!ctx || !dadosAtuais.dados_usuario) return;
     
     const dados = dadosAtuais.dados_usuario;
+    const tipoEixo = dados.tipo_eixo || 'dia';
+    const labelsFormatados = formatarLabelEixoX(dados.labels, tipoEixo);
     
     if (graficoUsuario) {
         graficoUsuario.destroy();
@@ -402,7 +510,7 @@ function atualizarGraficoUsuario() {
     graficoUsuario = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: dados.labels.map(d => `Dia ${d}`),
+            labels: labelsFormatados,
             datasets: dados.datasets.map((ds, idx) => ({
                 label: ds.label,
                 data: ds.data,
@@ -449,6 +557,67 @@ function atualizarGraficoUsuario() {
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Atualiza gráfico de produção detalhada por usuário (módulo x usuário, eixo X = dias/meses)
+ */
+function atualizarGraficoUsuarioDetalhado() {
+    const ctx = document.getElementById('grafico-usuario-detalhado');
+    if (!ctx || !dadosAtuais.dados_usuario_detalhado) return;
+    
+    const dados = dadosAtuais.dados_usuario_detalhado;
+    const tipoEixo = dados.tipo_eixo || 'dia';
+    const labelsFormatados = formatarLabelEixoX(dados.labels, tipoEixo);
+    
+    if (graficoUsuarioDetalhado) {
+        graficoUsuarioDetalhado.destroy();
+    }
+    
+    graficoUsuarioDetalhado = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labelsFormatados,
+            datasets: dados.datasets.map((ds, idx) => ({
+                label: ds.label,
+                data: ds.data,
+                backgroundColor: coresGraficos[idx % coresGraficos.length],
+                borderColor: coresGraficos[idx % coresGraficos.length].replace('0.8', '1'),
+                borderWidth: 1
+            }))
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        color: 'rgba(255, 255, 255, 0.9)',
+                        font: { size: 11 }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    borderWidth: 1
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: 'rgba(255, 255, 255, 0.7)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                y: {
+                    ticks: { color: 'rgba(255, 255, 255, 0.7)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
                 }
             }
         }
@@ -571,25 +740,24 @@ function filtrarDadosComProducao(dados) {
 }
 
 /**
- * Cria um gráfico temporário para PDF
+ * Cria um gráfico temporário para PDF.
+ * Retorna { imageData, width, height } em pixels para preservar proporção ao inserir no PDF.
  */
 function criarGraficoPDF(tipo, dados, titulo, width = 1000, height = 500) {
     return new Promise((resolve) => {
-        // Ajustar largura baseado no número de labels para evitar compressão
         const numLabels = dados.labels.length;
-        const larguraMinima = 1000;
-        const larguraPorLabel = 35; // pixels por label
-        const larguraCalculada = Math.max(larguraMinima, numLabels * larguraPorLabel);
+        const larguraMinima = 800;
+        const larguraPorLabel = 28;
+        const larguraCalculada = Math.max(larguraMinima, Math.min(1200, numLabels * larguraPorLabel));
+        const alturaCanvas = 420;
         
-        // Criar canvas temporário
         const canvas = document.createElement('canvas');
         canvas.width = larguraCalculada;
-        canvas.height = height;
+        canvas.height = alturaCanvas;
         const ctx = canvas.getContext('2d');
         
-        // Preencher fundo branco
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillRect(0, 0, larguraCalculada, alturaCanvas);
         
         // Criar gráfico com tema branco
         const chart = new Chart(ctx, {
@@ -669,12 +837,15 @@ function criarGraficoPDF(tipo, dados, titulo, width = 1000, height = 500) {
             }
         });
         
-        // Aguardar renderização completa
         setTimeout(() => {
             try {
                 const imageData = canvas.toDataURL('image/png', 1.0);
                 chart.destroy();
-                resolve(imageData);
+                resolve({
+                    imageData,
+                    width: larguraCalculada,
+                    height: alturaCanvas
+                });
             } catch (e) {
                 console.error('Erro ao converter gráfico:', e);
                 chart.destroy();
@@ -682,6 +853,28 @@ function criarGraficoPDF(tipo, dados, titulo, width = 1000, height = 500) {
             }
         }, 1000);
     });
+}
+
+/** Largura útil da página em mm (A4). */
+const PDF_PAGE_WIDTH_MM = 210;
+/** Altura máxima para um gráfico no PDF (mm) para caber na página. */
+const PDF_GRAFICO_ALTURA_MAX_MM = 95;
+
+/**
+ * Insere imagem do gráfico no PDF preservando proporção (evita esticado/achatado).
+ */
+function inserirGraficoNoPDF(pdf, resultado, yPos, pageWidth, pageHeight) {
+    if (!resultado || !resultado.imageData) return yPos;
+    const larguraPdf = pageWidth - 20;
+    const aspect = resultado.width / resultado.height;
+    let alturaPdf = larguraPdf / aspect;
+    if (alturaPdf > PDF_GRAFICO_ALTURA_MAX_MM) alturaPdf = PDF_GRAFICO_ALTURA_MAX_MM;
+    if (yPos + alturaPdf > pageHeight - 30) {
+        pdf.addPage();
+        yPos = 20;
+    }
+    pdf.addImage(resultado.imageData, 'PNG', 10, yPos, larguraPdf, alturaPdf);
+    return yPos + alturaPdf + 10;
 }
 
 /**
@@ -830,14 +1023,34 @@ async function gerarPDF() {
         
         yPos += 5;
         
-        // Gráfico 1: Produção por Módulo
+        // Gráfico 1: Produção por Módulo (resumo: total por módulo)
+        if (dadosAtuais.dados_modulo_resumo && dadosAtuais.dados_modulo_resumo.labels.length > 0) {
+            const resumo = dadosAtuais.dados_modulo_resumo;
+            const dadosResumoPDF = {
+                labels: resumo.labels,
+                datasets: [{
+                    label: 'Total',
+                    data: resumo.data,
+                    backgroundColor: resumo.data.map((_, i) => coresPDF[i % coresPDF.length]),
+                    borderColor: resumo.data.map((_, i) => coresPDF[i % coresPDF.length]),
+                    borderWidth: 2
+                }]
+            };
+            const resultadoResumo = await criarGraficoPDF('bar', dadosResumoPDF, 'Produção por Módulo');
+            if (resultadoResumo) {
+                yPos = inserirGraficoNoPDF(pdf, resultadoResumo, yPos, pageWidth, pageHeight);
+            }
+            yPos = adicionarTabelaModuloResumo(pdf, resumo, yPos, pageWidth, pageHeight);
+        }
+        
+        // Gráfico 2: Produção Detalhada por Módulo
         if (dadosAtuais.dados_modulo && dadosAtuais.dados_modulo.datasets.length > 0) {
-            // Filtrar dados para mostrar apenas dias com produção
             const dadosModuloFiltrados = filtrarDadosComProducao(dadosAtuais.dados_modulo);
             
             if (dadosModuloFiltrados.labels.length > 0) {
+                const tipoEixoMod = dadosAtuais.dados_modulo.tipo_eixo || 'dia';
                 const dadosModuloPDF = {
-                    labels: dadosModuloFiltrados.labels.map(d => `Dia ${d}`),
+                    labels: formatarLabelEixoX(dadosModuloFiltrados.labels, tipoEixoMod),
                     datasets: dadosModuloFiltrados.datasets.map((ds, idx) => ({
                         label: ds.label,
                         data: ds.data,
@@ -847,30 +1060,15 @@ async function gerarPDF() {
                     }))
                 };
                 
-                const imgModulo = await criarGraficoPDF('bar', dadosModuloPDF, 'Produção por Módulo');
-                
-                if (imgModulo) {
-                    if (yPos + 100 > pageHeight - 30) {
-                        pdf.addPage();
-                        yPos = 20;
-                    }
-                    
-                    // Calcular altura do gráfico baseado no número de labels
-                    const numLabels = dadosModuloFiltrados.labels.length;
-                    const graficoHeight = Math.max(80, Math.min(120, 60 + (numLabels * 2)));
-                    
-                    // Ajustar largura se necessário (mas manter dentro da página)
-                    const larguraGrafico = pageWidth - 20;
-                    pdf.addImage(imgModulo, 'PNG', 10, yPos, larguraGrafico, graficoHeight);
-                    yPos += graficoHeight + 10;
+                const resultadoModulo = await criarGraficoPDF('bar', dadosModuloPDF, 'Produção Detalhada por Módulo');
+                if (resultadoModulo) {
+                    yPos = inserirGraficoNoPDF(pdf, resultadoModulo, yPos, pageWidth, pageHeight);
                 }
-                
-                // Tabela de dados por módulo (apenas dias com produção)
                 yPos = adicionarTabelaModulo(pdf, dadosModuloFiltrados, yPos, pageWidth, pageHeight);
             }
         }
         
-        // Gráfico 2: Produção por Usuário
+        // Gráfico 3: Produção por Usuário
         if (dadosAtuais.dados_usuario && dadosAtuais.dados_usuario.datasets.length > 0) {
             // Filtrar dados para mostrar apenas dias com produção
             const dadosUsuarioFiltrados = filtrarDadosComProducao(dadosAtuais.dados_usuario);
@@ -881,8 +1079,9 @@ async function gerarPDF() {
                     yPos = 20;
                 }
                 
+                const tipoEixoUsr = dadosAtuais.dados_usuario.tipo_eixo || 'dia';
                 const dadosUsuarioPDF = {
-                    labels: dadosUsuarioFiltrados.labels.map(d => `Dia ${d}`),
+                    labels: formatarLabelEixoX(dadosUsuarioFiltrados.labels, tipoEixoUsr),
                     datasets: dadosUsuarioFiltrados.datasets.map((ds, idx) => ({
                         label: ds.label,
                         data: ds.data,
@@ -892,18 +1091,9 @@ async function gerarPDF() {
                     }))
                 };
                 
-                const imgUsuario = await criarGraficoPDF('bar', dadosUsuarioPDF, 'Produção por Usuário');
-                if (imgUsuario) {
-                    if (yPos + 100 > pageHeight - 30) {
-                        pdf.addPage();
-                        yPos = 20;
-                    }
-                    // Calcular altura do gráfico baseado no número de labels
-                    const numLabels = dadosUsuarioFiltrados.labels.length;
-                    const graficoHeight = Math.max(80, Math.min(120, 60 + (numLabels * 2)));
-                    const larguraGrafico = pageWidth - 20;
-                    pdf.addImage(imgUsuario, 'PNG', 10, yPos, larguraGrafico, graficoHeight);
-                    yPos += graficoHeight + 10;
+                const resultadoUsuario = await criarGraficoPDF('bar', dadosUsuarioPDF, 'Produção por Usuário');
+                if (resultadoUsuario) {
+                    yPos = inserirGraficoNoPDF(pdf, resultadoUsuario, yPos, pageWidth, pageHeight);
                 }
                 
                 // Tabela de dados por usuário (apenas dias com produção)
@@ -911,7 +1101,34 @@ async function gerarPDF() {
             }
         }
         
-        // Gráfico 3: Produção por Período
+        // Gráfico 4: Produção Detalhada por Usuário (módulo x usuário, eixo X = dias/meses)
+        if (dadosAtuais.dados_usuario_detalhado && dadosAtuais.dados_usuario_detalhado.datasets.length > 0) {
+            const dadosUsuarioDetFiltrados = filtrarDadosComProducao(dadosAtuais.dados_usuario_detalhado);
+            if (dadosUsuarioDetFiltrados.labels.length > 0) {
+                if (yPos + 100 > pageHeight - 30) {
+                    pdf.addPage();
+                    yPos = 20;
+                }
+                const tipoEixoDet = dadosAtuais.dados_usuario_detalhado.tipo_eixo || 'dia';
+                const dadosUsuarioDetPDF = {
+                    labels: formatarLabelEixoX(dadosUsuarioDetFiltrados.labels, tipoEixoDet),
+                    datasets: dadosUsuarioDetFiltrados.datasets.map((ds, idx) => ({
+                        label: ds.label,
+                        data: ds.data,
+                        backgroundColor: coresPDF[idx % coresPDF.length],
+                        borderColor: coresPDF[idx % coresPDF.length],
+                        borderWidth: 2
+                    }))
+                };
+                const resultadoUsuarioDet = await criarGraficoPDF('bar', dadosUsuarioDetPDF, 'Produção Detalhada por Usuário');
+                if (resultadoUsuarioDet) {
+                    yPos = inserirGraficoNoPDF(pdf, resultadoUsuarioDet, yPos, pageWidth, pageHeight);
+                }
+                yPos = adicionarTabelaUsuarioDetalhado(pdf, dadosUsuarioDetFiltrados, yPos, pageWidth, pageHeight);
+            }
+        }
+        
+        // Gráfico 5: Produção por Período
         if (dadosAtuais.dados_periodo && dadosAtuais.dados_periodo.datasets.length > 0) {
             // Filtrar dados para mostrar apenas meses com produção
             const dadosPeriodoFiltrados = filtrarDadosComProducao(dadosAtuais.dados_periodo);
@@ -933,18 +1150,9 @@ async function gerarPDF() {
                     }))
                 };
                 
-                const imgPeriodo = await criarGraficoPDF('bar', dadosPeriodoPDF, 'Produção por Período');
-                if (imgPeriodo) {
-                    if (yPos + 100 > pageHeight - 30) {
-                        pdf.addPage();
-                        yPos = 20;
-                    }
-                    // Calcular altura do gráfico baseado no número de labels
-                    const numLabels = dadosPeriodoFiltrados.labels.length;
-                    const graficoHeight = Math.max(80, Math.min(120, 60 + (numLabels * 2)));
-                    const larguraGrafico = pageWidth - 20;
-                    pdf.addImage(imgPeriodo, 'PNG', 10, yPos, larguraGrafico, graficoHeight);
-                    yPos += graficoHeight + 10;
+                const resultadoPeriodo = await criarGraficoPDF('bar', dadosPeriodoPDF, 'Produção por Período');
+                if (resultadoPeriodo) {
+                    yPos = inserirGraficoNoPDF(pdf, resultadoPeriodo, yPos, pageWidth, pageHeight);
                 }
                 
                 // Tabela de dados por período (apenas meses com produção)
@@ -981,7 +1189,80 @@ async function gerarPDF() {
 }
 
 /**
- * Adiciona tabela de dados por módulo ao PDF
+ * Adiciona tabela resumo Módulo | Total ao PDF (Produção por Módulo)
+ */
+function adicionarTabelaModuloResumo(pdf, dados, yPos, pageWidth, pageHeight) {
+    if (!dados || !dados.labels || dados.labels.length === 0) return yPos;
+    
+    if (yPos + 40 > pageHeight - 30) {
+        pdf.addPage();
+        yPos = 20;
+    }
+    
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('Tabela - Produção por Módulo', 10, yPos);
+    yPos += 7;
+    
+    const margemEsquerda = 10;
+    const margemDireita = 10;
+    const larguraTotalDisponivel = pageWidth - margemEsquerda - margemDireita;
+    const larguraColunaRotulo = Math.max(80, larguraTotalDisponivel * 0.6);
+    const larguraColunaTotal = larguraTotalDisponivel - larguraColunaRotulo;
+    let xPos = margemEsquerda;
+    
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFillColor(70, 130, 180);
+    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'F');
+    pdf.rect(xPos + larguraColunaRotulo, yPos, larguraColunaTotal, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text('Módulo', xPos + 2, yPos + 5);
+    pdf.text('Total', xPos + larguraColunaRotulo + 2, yPos + 5);
+    yPos += 8;
+    pdf.setTextColor(0, 0, 0);
+    
+    const totalGeral = dados.data.reduce((a, b) => a + b, 0);
+    dados.labels.forEach((label, idx) => {
+        if (yPos + 8 > pageHeight - 30) {
+            pdf.addPage();
+            yPos = 20;
+        }
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(0, 0, 0);
+        if (idx % 2 === 0) {
+            pdf.setFillColor(248, 248, 248);
+            pdf.rect(xPos, yPos, larguraColunaRotulo + larguraColunaTotal, 7, 'F');
+        }
+        pdf.setDrawColor(200, 200, 200);
+        pdf.rect(xPos, yPos, larguraColunaRotulo, 7, 'S');
+        pdf.rect(xPos + larguraColunaRotulo, yPos, larguraColunaTotal, 7, 'S');
+        pdf.text(label.substring(0, Math.floor(larguraColunaRotulo / 2.5)), xPos + 2, yPos + 5);
+        pdf.text(String(dados.data[idx]), xPos + larguraColunaRotulo + 2, yPos + 5);
+        yPos += 7;
+    });
+    
+    if (yPos + 8 > pageHeight - 30) {
+        pdf.addPage();
+        yPos = 20;
+    }
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(xPos, yPos, larguraColunaRotulo + larguraColunaTotal, 8, 'F');
+    pdf.setDrawColor(180, 180, 180);
+    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'S');
+    pdf.rect(xPos + larguraColunaRotulo, yPos, larguraColunaTotal, 8, 'S');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('Total', xPos + 2, yPos + 5);
+    pdf.text(String(totalGeral), xPos + larguraColunaRotulo + 2, yPos + 5);
+    yPos += 8 + 5;
+    
+    return yPos;
+}
+
+/**
+ * Adiciona tabela de dados por módulo (detalhada) ao PDF, com totais de linhas e colunas
  */
 function adicionarTabelaModulo(pdf, dados, yPos, pageWidth, pageHeight) {
     // Verificar se há dados para mostrar
@@ -998,396 +1279,446 @@ function adicionarTabelaModulo(pdf, dados, yPos, pageWidth, pageHeight) {
         yPos = 20;
     }
     
-    pdf.text('Tabela - Produção por Módulo', 10, yPos);
+    pdf.text('Tabela - Produção Detalhada por Módulo', 10, yPos);
     yPos += 7;
     
     // Salvar tamanho de fonte original
     const tamanhoFonteOriginal = pdf.getFontSize();
     
-    // Calcular largura das colunas (mínimo para não ficar muito estreito)
+    // Coluna extra para Total da linha
     const numColunas = dados.labels.length;
+    const numColunasComTotal = numColunas + 1;
     const margemEsquerda = 10;
     const margemDireita = 10;
     const larguraTotalDisponivel = pageWidth - margemEsquerda - margemDireita;
-    let larguraColunaRotulo = Math.max(50, larguraTotalDisponivel * 0.3); // Aumentado para 30%
+    let larguraColunaRotulo = Math.max(50, larguraTotalDisponivel * 0.28);
     const larguraRestanteParaDados = larguraTotalDisponivel - larguraColunaRotulo;
     let larguraColunaDados = Math.max(
-        15, // Largura mínima reduzida para caber melhor
-        larguraRestanteParaDados / numColunas
+        12,
+        larguraRestanteParaDados / numColunasComTotal
     );
-    
-    // Garantir que a largura total não ultrapasse os limites
-    const larguraTotalCalculada = larguraColunaRotulo + (larguraColunaDados * numColunas);
+    const larguraColunaTotalLinha = larguraColunaDados;
+    let larguraTotalCalculada = larguraColunaRotulo + (larguraColunaDados * numColunasComTotal);
     if (larguraTotalCalculada > larguraTotalDisponivel) {
-        // Ajustar proporcionalmente se ultrapassar
         const fatorAjuste = larguraTotalDisponivel / larguraTotalCalculada;
-        const larguraColunaDadosAjustada = larguraColunaDados * fatorAjuste;
-        const larguraColunaDadosFinal = Math.max(12, larguraColunaDadosAjustada);
-        const larguraColunaRotuloFinal = larguraTotalDisponivel - (larguraColunaDadosFinal * numColunas);
-        
-        larguraColunaRotulo = Math.max(40, larguraColunaRotuloFinal);
-        larguraColunaDados = larguraColunaDadosFinal;
+        larguraColunaDados = Math.max(10, larguraColunaDados * fatorAjuste);
+        larguraColunaRotulo = Math.max(40, larguraTotalDisponivel - (larguraColunaDados * numColunasComTotal));
     }
     
-    let xPos = margemEsquerda;
+    const totaisColunas = dados.labels.map((_, j) => dados.datasets.reduce((s, ds) => s + (ds.data[j] || 0), 0));
+    const totalGeralMod = dados.datasets.reduce((s, ds) => s + ds.data.reduce((a, b) => a + b, 0), 0);
     
+    let xPos = margemEsquerda;
     pdf.setFontSize(8);
     pdf.setFont('helvetica', 'bold');
-    pdf.setFillColor(70, 130, 180); // Azul aço
+    pdf.setFillColor(70, 130, 180);
     pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'F');
     pdf.setTextColor(255, 255, 255);
     pdf.text('Módulo', xPos + 2, yPos + 5);
     xPos += larguraColunaRotulo;
     
     dados.labels.forEach((dia, diaIdx) => {
-        // Verificar se não ultrapassa a margem direita na última coluna
-        const larguraColunaAtual = (diaIdx === dados.labels.length - 1) 
-            ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos)
+        const larguraColunaAtual = (diaIdx === dados.labels.length - 1)
+            ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos - larguraColunaTotalLinha)
             : larguraColunaDados;
-        
-        pdf.setFillColor(70, 130, 180); // Azul aço
+        pdf.setFillColor(70, 130, 180);
         pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'F');
-        // Ajustar tamanho do texto se coluna muito estreita
-        if (larguraColunaAtual < 15) {
-            pdf.setFontSize(7);
-        }
-        pdf.text(`Dia ${dia}`, xPos + 2, yPos + 5);
-        if (larguraColunaAtual < 15) {
-            pdf.setFontSize(8); // Restaurar
-        }
+        const labelTexto = typeof dia === 'number' ? `Dia ${dia}` : dia;
+        pdf.text(labelTexto.length > 8 ? labelTexto.substring(0, 8) : labelTexto, xPos + 2, yPos + 5);
         xPos += larguraColunaAtual;
     });
-    
+    pdf.setFillColor(70, 130, 180);
+    pdf.rect(xPos, yPos, larguraColunaTotalLinha, 8, 'F');
+    pdf.text('Total', xPos + 2, yPos + 5);
+    xPos += larguraColunaTotalLinha;
     yPos += 8;
     pdf.setTextColor(0, 0, 0);
-    pdf.setFontSize(tamanhoFonteOriginal); // Restaurar tamanho original
+    pdf.setFontSize(tamanhoFonteOriginal);
     
-        // Dados da tabela
-        dados.datasets.forEach((dataset, idx) => {
-            if (yPos + 8 > pageHeight - 30) {
-                pdf.addPage();
-                yPos = 20;
-            }
-            
-            xPos = margemEsquerda;
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(8);
-            pdf.setTextColor(0, 0, 0);
-            // Alternar cor de fundo para melhor legibilidade
-            const larguraTotalLinha = larguraColunaRotulo + (larguraColunaDados * numColunas);
-            if (idx % 2 === 0) {
-                pdf.setFillColor(245, 245, 245);
-                pdf.rect(xPos, yPos, larguraTotalLinha, 7, 'F');
-            }
-            pdf.setDrawColor(200, 200, 200);
-            pdf.rect(xPos, yPos, larguraColunaRotulo, 7, 'S');
-            // Ajustar tamanho do texto se necessário
-            let tamanhoTexto = 8;
-            if (larguraColunaRotulo < 40) {
-                tamanhoTexto = 7;
-            }
-            pdf.setFontSize(tamanhoTexto);
-            pdf.text(dataset.label.substring(0, Math.floor(larguraColunaRotulo / 2.5)), xPos + 2, yPos + 5);
-            xPos += larguraColunaRotulo;
-            
-            dataset.data.forEach((valor, colIdx) => {
-                // Verificar se não ultrapassa a margem direita
-                const larguraColunaAtual = (colIdx === dataset.data.length - 1) 
-                    ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos)
-                    : larguraColunaDados;
-                
-                if (idx % 2 === 0) {
-                    pdf.setFillColor(245, 245, 245);
-                    pdf.rect(xPos, yPos, larguraColunaAtual, 7, 'F');
-                }
-                pdf.setDrawColor(200, 200, 200);
-                pdf.rect(xPos, yPos, larguraColunaAtual, 7, 'S');
-                pdf.setTextColor(0, 0, 0);
-                // Ajustar tamanho do texto se coluna muito estreita
-                if (larguraColunaAtual < 15) {
-                    pdf.setFontSize(7);
-                }
-                pdf.text(valor.toString(), xPos + 2, yPos + 5);
-                if (larguraColunaAtual < 15) {
-                    pdf.setFontSize(8); // Restaurar
-                }
-                xPos += larguraColunaAtual;
-            });
-            
-            yPos += 7;
-        });
-    
-    return yPos + 5;
-}
-
-/**
- * Adiciona tabela de dados por usuário ao PDF
- */
-function adicionarTabelaUsuario(pdf, dados, yPos, pageWidth, pageHeight) {
-    // Verificar se há dados para mostrar
-    if (!dados || !dados.labels || dados.labels.length === 0) {
-        return yPos;
-    }
-    
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(0, 0, 0);
-    
-    if (yPos + 30 > pageHeight - 30) {
-        pdf.addPage();
-        yPos = 20;
-    }
-    
-    pdf.text('Tabela - Produção por Usuário', 10, yPos);
-    yPos += 7;
-    
-    // Salvar tamanho de fonte original
-    const tamanhoFonteOriginalUsuario = pdf.getFontSize();
-    
-    // Calcular largura das colunas
-    const numColunas = dados.labels.length;
-    const margemEsquerda = 10;
-    const margemDireita = 10;
-    const larguraTotalDisponivel = pageWidth - margemEsquerda - margemDireita;
-    let larguraColunaRotulo = Math.max(50, larguraTotalDisponivel * 0.3); // Aumentado para 30%
-    const larguraRestanteParaDados = larguraTotalDisponivel - larguraColunaRotulo;
-    let larguraColunaDados = Math.max(
-        15, // Largura mínima reduzida
-        larguraRestanteParaDados / numColunas
-    );
-    
-    // Garantir que a largura total não ultrapasse os limites
-    const larguraTotalCalculada = larguraColunaRotulo + (larguraColunaDados * numColunas);
-    if (larguraTotalCalculada > larguraTotalDisponivel) {
-        // Ajustar proporcionalmente se ultrapassar
-        const fatorAjuste = larguraTotalDisponivel / larguraTotalCalculada;
-        const larguraColunaDadosAjustada = larguraColunaDados * fatorAjuste;
-        const larguraColunaDadosFinal = Math.max(12, larguraColunaDadosAjustada);
-        const larguraColunaRotuloFinal = larguraTotalDisponivel - (larguraColunaDadosFinal * numColunas);
-        
-        larguraColunaRotulo = Math.max(40, larguraColunaRotuloFinal);
-        larguraColunaDados = larguraColunaDadosFinal;
-    }
-    
-    let xPos = margemEsquerda;
-    
-    pdf.setFontSize(8);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFillColor(70, 130, 180); // Azul aço
-    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'F');
-    pdf.setTextColor(255, 255, 255);
-    pdf.text('Usuário', xPos + 2, yPos + 5);
-    xPos += larguraColunaRotulo;
-    
-    dados.labels.forEach((dia, diaIdx) => {
-        // Verificar se não ultrapassa a margem direita na última coluna
-        const larguraColunaAtual = (diaIdx === dados.labels.length - 1) 
-            ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos)
-            : larguraColunaDados;
-        
-        pdf.setFillColor(70, 130, 180); // Azul aço
-        pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'F');
-        // Ajustar tamanho do texto se coluna muito estreita
-        if (larguraColunaAtual < 15) {
-            pdf.setFontSize(7);
-        }
-        pdf.text(`Dia ${dia}`, xPos + 2, yPos + 5);
-        if (larguraColunaAtual < 15) {
-            pdf.setFontSize(8); // Restaurar
-        }
-        xPos += larguraColunaAtual;
-    });
-    
-    yPos += 8;
-    pdf.setTextColor(0, 0, 0);
-    pdf.setFontSize(tamanhoFonteOriginalUsuario); // Restaurar tamanho original
-    
-    let idx = 0;
-    dados.datasets.forEach((dataset) => {
+    dados.datasets.forEach((dataset, idx) => {
         if (yPos + 8 > pageHeight - 30) {
             pdf.addPage();
             yPos = 20;
         }
-        
         xPos = margemEsquerda;
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8);
         pdf.setTextColor(0, 0, 0);
-        // Alternar cor de fundo
-        const larguraTotalLinhaUsuario = larguraColunaRotulo + (larguraColunaDados * numColunas);
+        const rowTotal = dataset.data.reduce((a, b) => a + b, 0);
+        const larguraTotalLinha = larguraColunaRotulo + (larguraColunaDados * numColunas) + larguraColunaTotalLinha;
         if (idx % 2 === 0) {
-            pdf.setFillColor(245, 245, 245);
-            pdf.rect(xPos, yPos, larguraTotalLinhaUsuario, 7, 'F');
+            pdf.setFillColor(248, 248, 248);
+            pdf.rect(xPos, yPos, larguraTotalLinha, 7, 'F');
         }
         pdf.setDrawColor(200, 200, 200);
         pdf.rect(xPos, yPos, larguraColunaRotulo, 7, 'S');
-        // Ajustar tamanho do texto se necessário
-        let tamanhoTextoUsuario = 8;
-        if (larguraColunaRotulo < 40) {
-            tamanhoTextoUsuario = 7;
-        }
-        pdf.setFontSize(tamanhoTextoUsuario);
         pdf.text(dataset.label.substring(0, Math.floor(larguraColunaRotulo / 2.5)), xPos + 2, yPos + 5);
         xPos += larguraColunaRotulo;
         
-        dataset.data.forEach(valor => {
-            if (idx % 2 === 0) {
-                pdf.setFillColor(245, 245, 245);
-                pdf.rect(xPos, yPos, larguraColunaDados, 7, 'F');
-            }
-            pdf.setDrawColor(200, 200, 200);
-            pdf.rect(xPos, yPos, larguraColunaDados, 7, 'S');
-            pdf.setTextColor(0, 0, 0);
-            pdf.text(valor.toString(), xPos + 2, yPos + 5);
-            xPos += larguraColunaDados;
-        });
-        
-        yPos += 7;
-        idx++;
-    });
-    
-    return yPos + 5;
-}
-
-/**
- * Adiciona tabela de dados por período ao PDF
- */
-function adicionarTabelaPeriodo(pdf, dados, yPos, pageWidth, pageHeight) {
-    // Verificar se há dados para mostrar
-    if (!dados || !dados.labels || dados.labels.length === 0) {
-        return yPos;
-    }
-    
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(0, 0, 0);
-    
-    if (yPos + 30 > pageHeight - 30) {
-        pdf.addPage();
-        yPos = 20;
-    }
-    
-    pdf.text('Tabela - Produção por Período', 10, yPos);
-    yPos += 7;
-    
-    // Salvar tamanho de fonte original
-    const tamanhoFonteOriginalPeriodo = pdf.getFontSize();
-    
-    // Calcular largura das colunas
-    const numColunas = dados.labels.length;
-    const margemEsquerda = 10;
-    const margemDireita = 10;
-    const larguraTotalDisponivel = pageWidth - margemEsquerda - margemDireita;
-    let larguraColunaRotulo = Math.max(40, larguraTotalDisponivel * 0.25);
-    const larguraRestanteParaDados = larguraTotalDisponivel - larguraColunaRotulo;
-    let larguraColunaDados = Math.max(
-        12, // Largura mínima para meses
-        larguraRestanteParaDados / numColunas
-    );
-    
-    // Garantir que a largura total não ultrapasse os limites
-    const larguraTotalCalculada = larguraColunaRotulo + (larguraColunaDados * numColunas);
-    if (larguraTotalCalculada > larguraTotalDisponivel) {
-        // Ajustar proporcionalmente se ultrapassar
-        const fatorAjuste = larguraTotalDisponivel / larguraTotalCalculada;
-        const larguraColunaDadosAjustada = larguraColunaDados * fatorAjuste;
-        const larguraColunaDadosFinal = Math.max(10, larguraColunaDadosAjustada);
-        const larguraColunaRotuloFinal = larguraTotalDisponivel - (larguraColunaDadosFinal * numColunas);
-        
-        larguraColunaRotulo = Math.max(30, larguraColunaRotuloFinal);
-        larguraColunaDados = larguraColunaDadosFinal;
-    }
-    
-    let xPos = margemEsquerda;
-    
-    pdf.setFontSize(8);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFillColor(70, 130, 180); // Azul aço
-    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'F');
-    pdf.setTextColor(255, 255, 255);
-    pdf.text('Ano', xPos + 2, yPos + 5);
-    xPos += larguraColunaRotulo;
-    
-    dados.labels.forEach((mes, mesIdx) => {
-        // Verificar se não ultrapassa a margem direita na última coluna
-        const larguraColunaAtual = (mesIdx === dados.labels.length - 1) 
-            ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos)
-            : larguraColunaDados;
-        
-        pdf.setFillColor(70, 130, 180); // Azul aço
-        pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'F');
-        // Ajustar tamanho do texto se coluna muito estreita
-        if (larguraColunaAtual < 12) {
-            pdf.setFontSize(7);
-        }
-        pdf.text(mes, xPos + 2, yPos + 5);
-        if (larguraColunaAtual < 12) {
-            pdf.setFontSize(8); // Restaurar
-        }
-        xPos += larguraColunaAtual;
-    });
-    
-    yPos += 8;
-    pdf.setTextColor(0, 0, 0);
-    pdf.setFontSize(tamanhoFonteOriginalPeriodo); // Restaurar tamanho original
-    
-    let idx = 0;
-    dados.datasets.forEach((dataset) => {
-        if (yPos + 8 > pageHeight - 30) {
-            pdf.addPage();
-            yPos = 20;
-        }
-        
-        xPos = margemEsquerda;
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(8);
-        pdf.setTextColor(0, 0, 0);
-        // Alternar cor de fundo
-        const larguraTotalLinhaPeriodo = larguraColunaRotulo + (larguraColunaDados * numColunas);
-        if (idx % 2 === 0) {
-            pdf.setFillColor(245, 245, 245);
-            pdf.rect(xPos, yPos, larguraTotalLinhaPeriodo, 7, 'F');
-        }
-        pdf.setDrawColor(200, 200, 200);
-        pdf.rect(xPos, yPos, larguraColunaRotulo, 7, 'S');
-        // Ajustar tamanho do texto se necessário
-        let tamanhoTextoPeriodo = 8;
-        if (larguraColunaRotulo < 35) {
-            tamanhoTextoPeriodo = 7;
-        }
-        pdf.setFontSize(tamanhoTextoPeriodo);
-        pdf.text(dataset.label, xPos + 2, yPos + 5);
-        xPos += larguraColunaRotulo;
-        
         dataset.data.forEach((valor, colIdx) => {
-            // Verificar se não ultrapassa a margem direita
-            const larguraColunaAtual = (colIdx === dataset.data.length - 1) 
-                ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos)
+            const larguraColunaAtual = (colIdx === dataset.data.length - 1)
+                ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos - larguraColunaTotalLinha)
                 : larguraColunaDados;
-            
             if (idx % 2 === 0) {
-                pdf.setFillColor(245, 245, 245);
+                pdf.setFillColor(248, 248, 248);
                 pdf.rect(xPos, yPos, larguraColunaAtual, 7, 'F');
             }
             pdf.setDrawColor(200, 200, 200);
             pdf.rect(xPos, yPos, larguraColunaAtual, 7, 'S');
             pdf.setTextColor(0, 0, 0);
-            // Ajustar tamanho do texto se coluna muito estreita
-            if (larguraColunaAtual < 12) {
-                pdf.setFontSize(7);
-            }
             pdf.text(valor.toString(), xPos + 2, yPos + 5);
-            if (larguraColunaAtual < 12) {
-                pdf.setFontSize(8); // Restaurar
-            }
             xPos += larguraColunaAtual;
         });
+        pdf.setDrawColor(200, 200, 200);
+        pdf.rect(xPos, yPos, larguraColunaTotalLinha, 7, 'S');
+        if (idx % 2 === 0) {
+            pdf.setFillColor(248, 248, 248);
+            pdf.rect(xPos, yPos, larguraColunaTotalLinha, 7, 'F');
+        }
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(rowTotal.toString(), xPos + 2, yPos + 5);
+        yPos += 7;
+    });
+    
+    if (yPos + 8 > pageHeight - 30) {
+        pdf.addPage();
+        yPos = 20;
+    }
+    pdf.setFont('helvetica', 'bold');
+    xPos = margemEsquerda;
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'F');
+    pdf.setDrawColor(180, 180, 180);
+    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'S');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('Total', xPos + 2, yPos + 5);
+    xPos += larguraColunaRotulo;
+    totaisColunas.forEach((tc, colIdx) => {
+        const larguraColunaAtual = (colIdx === totaisColunas.length - 1)
+            ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos - larguraColunaTotalLinha)
+            : larguraColunaDados;
+        pdf.setFillColor(240, 240, 240);
+        pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'F');
+        pdf.setDrawColor(180, 180, 180);
+        pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'S');
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(tc.toString(), xPos + 2, yPos + 5);
+        xPos += larguraColunaAtual;
+    });
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(xPos, yPos, larguraColunaTotalLinha, 8, 'F');
+    pdf.setDrawColor(180, 180, 180);
+    pdf.rect(xPos, yPos, larguraColunaTotalLinha, 8, 'S');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(totalGeralMod.toString(), xPos + 2, yPos + 5);
+    yPos += 8 + 5;
+    
+    return yPos;
+}
+
+/**
+ * Adiciona tabela de dados por usuário ao PDF, com totais de linhas e colunas.
+ * Opcional: titulo e rotuloColuna para reutilizar na tabela "Detalhada por Usuário".
+ */
+function adicionarTabelaUsuario(pdf, dados, yPos, pageWidth, pageHeight, titulo, rotuloColuna) {
+    if (!dados || !dados.labels || dados.labels.length === 0) return yPos;
+    if (titulo === undefined) titulo = 'Tabela - Produção por Usuário';
+    if (rotuloColuna === undefined) rotuloColuna = 'Usuário';
+    
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    if (yPos + 30 > pageHeight - 30) {
+        pdf.addPage();
+        yPos = 20;
+    }
+    pdf.text(titulo, 10, yPos);
+    yPos += 7;
+    
+    const tamanhoFonteOriginalUsuario = pdf.getFontSize();
+    const numColunas = dados.labels.length;
+    const numColunasComTotal = numColunas + 1;
+    const margemEsquerda = 10;
+    const margemDireita = 10;
+    const larguraTotalDisponivel = pageWidth - margemEsquerda - margemDireita;
+    let larguraColunaRotulo = Math.max(50, larguraTotalDisponivel * 0.28);
+    const larguraRestanteParaDados = larguraTotalDisponivel - larguraColunaRotulo;
+    let larguraColunaDados = Math.max(12, larguraRestanteParaDados / numColunasComTotal);
+    const larguraColunaTotalLinha = larguraColunaDados;
+    let larguraTotalCalculada = larguraColunaRotulo + (larguraColunaDados * numColunasComTotal);
+    if (larguraTotalCalculada > larguraTotalDisponivel) {
+        const fatorAjuste = larguraTotalDisponivel / larguraTotalCalculada;
+        larguraColunaDados = Math.max(10, larguraColunaDados * fatorAjuste);
+        larguraColunaRotulo = Math.max(40, larguraTotalDisponivel - (larguraColunaDados * numColunasComTotal));
+    }
+    
+    const totaisColunasUsr = dados.labels.map((_, j) => dados.datasets.reduce((s, ds) => s + (ds.data[j] || 0), 0));
+    const totalGeralUsr = dados.datasets.reduce((s, ds) => s + ds.data.reduce((a, b) => a + b, 0), 0);
+    
+    let xPos = margemEsquerda;
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFillColor(70, 130, 180);
+    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(rotuloColuna, xPos + 2, yPos + 5);
+    xPos += larguraColunaRotulo;
+    
+    dados.labels.forEach((dia, diaIdx) => {
+        const larguraColunaAtual = (diaIdx === dados.labels.length - 1)
+            ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos - larguraColunaTotalLinha)
+            : larguraColunaDados;
+        pdf.setFillColor(70, 130, 180);
+        pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'F');
+        const labelTexto = typeof dia === 'number' ? `Dia ${dia}` : dia;
+        pdf.text((labelTexto + '').length > 8 ? (labelTexto + '').substring(0, 8) : labelTexto, xPos + 2, yPos + 5);
+        xPos += larguraColunaAtual;
+    });
+    pdf.setFillColor(70, 130, 180);
+    pdf.rect(xPos, yPos, larguraColunaTotalLinha, 8, 'F');
+    pdf.text('Total', xPos + 2, yPos + 5);
+    xPos += larguraColunaTotalLinha;
+    yPos += 8;
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(tamanhoFonteOriginalUsuario);
+    
+    let idx = 0;
+    dados.datasets.forEach((dataset) => {
+        if (yPos + 8 > pageHeight - 30) {
+            pdf.addPage();
+            yPos = 20;
+        }
+        xPos = margemEsquerda;
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(0, 0, 0);
+        const rowTotal = dataset.data.reduce((a, b) => a + b, 0);
+        const larguraTotalLinhaUsuario = larguraColunaRotulo + (larguraColunaDados * numColunas) + larguraColunaTotalLinha;
+        if (idx % 2 === 0) {
+            pdf.setFillColor(248, 248, 248);
+            pdf.rect(xPos, yPos, larguraTotalLinhaUsuario, 7, 'F');
+        }
+        pdf.setDrawColor(200, 200, 200);
+        pdf.rect(xPos, yPos, larguraColunaRotulo, 7, 'S');
+        pdf.text(dataset.label.substring(0, Math.floor(larguraColunaRotulo / 2.5)), xPos + 2, yPos + 5);
+        xPos += larguraColunaRotulo;
         
+        dataset.data.forEach((valor, colIdx) => {
+            const larguraColunaAtual = (colIdx === dataset.data.length - 1)
+                ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos - larguraColunaTotalLinha)
+                : larguraColunaDados;
+            if (idx % 2 === 0) {
+                pdf.setFillColor(248, 248, 248);
+                pdf.rect(xPos, yPos, larguraColunaAtual, 7, 'F');
+            }
+            pdf.setDrawColor(200, 200, 200);
+            pdf.rect(xPos, yPos, larguraColunaAtual, 7, 'S');
+            pdf.setTextColor(0, 0, 0);
+            pdf.text(valor.toString(), xPos + 2, yPos + 5);
+            xPos += larguraColunaAtual;
+        });
+        pdf.setDrawColor(200, 200, 200);
+        pdf.rect(xPos, yPos, larguraColunaTotalLinha, 7, 'S');
+        if (idx % 2 === 0) {
+            pdf.setFillColor(248, 248, 248);
+            pdf.rect(xPos, yPos, larguraColunaTotalLinha, 7, 'F');
+        }
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(rowTotal.toString(), xPos + 2, yPos + 5);
         yPos += 7;
         idx++;
     });
     
-    return yPos + 5;
+    if (yPos + 8 > pageHeight - 30) {
+        pdf.addPage();
+        yPos = 20;
+    }
+    pdf.setFont('helvetica', 'bold');
+    xPos = margemEsquerda;
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'F');
+    pdf.setDrawColor(180, 180, 180);
+    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'S');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('Total', xPos + 2, yPos + 5);
+    xPos += larguraColunaRotulo;
+    totaisColunasUsr.forEach((tc, colIdx) => {
+        const larguraColunaAtual = (colIdx === totaisColunasUsr.length - 1)
+            ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos - larguraColunaTotalLinha)
+            : larguraColunaDados;
+        pdf.setFillColor(240, 240, 240);
+        pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'F');
+        pdf.setDrawColor(180, 180, 180);
+        pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'S');
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(tc.toString(), xPos + 2, yPos + 5);
+        xPos += larguraColunaAtual;
+    });
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(xPos, yPos, larguraColunaTotalLinha, 8, 'F');
+    pdf.setDrawColor(180, 180, 180);
+    pdf.rect(xPos, yPos, larguraColunaTotalLinha, 8, 'S');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(totalGeralUsr.toString(), xPos + 2, yPos + 5);
+    yPos += 8 + 5;
+    
+    return yPos;
+}
+
+/**
+ * Adiciona tabela de Produção Detalhada por Usuário (módulo x usuário, dias no eixo)
+ */
+function adicionarTabelaUsuarioDetalhado(pdf, dados, yPos, pageWidth, pageHeight) {
+    return adicionarTabelaUsuario(
+        pdf, dados, yPos, pageWidth, pageHeight,
+        'Tabela - Produção Detalhada por Usuário',
+        'Módulo — Usuário'
+    );
+}
+
+/**
+ * Adiciona tabela de dados por período ao PDF, com totais de linhas e colunas
+ */
+function adicionarTabelaPeriodo(pdf, dados, yPos, pageWidth, pageHeight) {
+    if (!dados || !dados.labels || dados.labels.length === 0) return yPos;
+    
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    if (yPos + 30 > pageHeight - 30) {
+        pdf.addPage();
+        yPos = 20;
+    }
+    pdf.text('Tabela - Produção por Período', 10, yPos);
+    yPos += 7;
+    
+    const tamanhoFonteOriginalPeriodo = pdf.getFontSize();
+    const numColunas = dados.labels.length;
+    const numColunasComTotal = numColunas + 1;
+    const margemEsquerda = 10;
+    const margemDireita = 10;
+    const larguraTotalDisponivel = pageWidth - margemEsquerda - margemDireita;
+    let larguraColunaRotulo = Math.max(40, larguraTotalDisponivel * 0.22);
+    const larguraRestanteParaDados = larguraTotalDisponivel - larguraColunaRotulo;
+    let larguraColunaDados = Math.max(10, larguraRestanteParaDados / numColunasComTotal);
+    const larguraColunaTotalLinha = larguraColunaDados;
+    let larguraTotalCalculada = larguraColunaRotulo + (larguraColunaDados * numColunasComTotal);
+    if (larguraTotalCalculada > larguraTotalDisponivel) {
+        const fatorAjuste = larguraTotalDisponivel / larguraTotalCalculada;
+        larguraColunaDados = Math.max(8, larguraColunaDados * fatorAjuste);
+        larguraColunaRotulo = Math.max(30, larguraTotalDisponivel - (larguraColunaDados * numColunasComTotal));
+    }
+    
+    const totaisColunasPeriodo = dados.labels.map((_, j) => dados.datasets.reduce((s, ds) => s + (ds.data[j] || 0), 0));
+    const totalGeralPeriodo = dados.datasets.reduce((s, ds) => s + ds.data.reduce((a, b) => a + b, 0), 0);
+    
+    let xPos = margemEsquerda;
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFillColor(70, 130, 180);
+    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text('Série', xPos + 2, yPos + 5);
+    xPos += larguraColunaRotulo;
+    
+    dados.labels.forEach((mes, mesIdx) => {
+        const larguraColunaAtual = (mesIdx === dados.labels.length - 1)
+            ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos - larguraColunaTotalLinha)
+            : larguraColunaDados;
+        pdf.setFillColor(70, 130, 180);
+        pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'F');
+        pdf.text((mes + '').length > 10 ? (mes + '').substring(0, 10) : mes, xPos + 2, yPos + 5);
+        xPos += larguraColunaAtual;
+    });
+    pdf.setFillColor(70, 130, 180);
+    pdf.rect(xPos, yPos, larguraColunaTotalLinha, 8, 'F');
+    pdf.text('Total', xPos + 2, yPos + 5);
+    xPos += larguraColunaTotalLinha;
+    yPos += 8;
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(tamanhoFonteOriginalPeriodo);
+    
+    let idx = 0;
+    dados.datasets.forEach((dataset) => {
+        if (yPos + 8 > pageHeight - 30) {
+            pdf.addPage();
+            yPos = 20;
+        }
+        xPos = margemEsquerda;
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(0, 0, 0);
+        const rowTotal = dataset.data.reduce((a, b) => a + b, 0);
+        const larguraTotalLinhaPeriodo = larguraColunaRotulo + (larguraColunaDados * numColunas) + larguraColunaTotalLinha;
+        if (idx % 2 === 0) {
+            pdf.setFillColor(248, 248, 248);
+            pdf.rect(xPos, yPos, larguraTotalLinhaPeriodo, 7, 'F');
+        }
+        pdf.setDrawColor(200, 200, 200);
+        pdf.rect(xPos, yPos, larguraColunaRotulo, 7, 'S');
+        pdf.text(dataset.label, xPos + 2, yPos + 5);
+        xPos += larguraColunaRotulo;
+        
+        dataset.data.forEach((valor, colIdx) => {
+            const larguraColunaAtual = (colIdx === dataset.data.length - 1)
+                ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos - larguraColunaTotalLinha)
+                : larguraColunaDados;
+            if (idx % 2 === 0) {
+                pdf.setFillColor(248, 248, 248);
+                pdf.rect(xPos, yPos, larguraColunaAtual, 7, 'F');
+            }
+            pdf.setDrawColor(200, 200, 200);
+            pdf.rect(xPos, yPos, larguraColunaAtual, 7, 'S');
+            pdf.setTextColor(0, 0, 0);
+            pdf.text(valor.toString(), xPos + 2, yPos + 5);
+            xPos += larguraColunaAtual;
+        });
+        pdf.setDrawColor(200, 200, 200);
+        pdf.rect(xPos, yPos, larguraColunaTotalLinha, 7, 'S');
+        if (idx % 2 === 0) {
+            pdf.setFillColor(248, 248, 248);
+            pdf.rect(xPos, yPos, larguraColunaTotalLinha, 7, 'F');
+        }
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(rowTotal.toString(), xPos + 2, yPos + 5);
+        yPos += 7;
+        idx++;
+    });
+    
+    if (yPos + 8 > pageHeight - 30) {
+        pdf.addPage();
+        yPos = 20;
+    }
+    pdf.setFont('helvetica', 'bold');
+    xPos = margemEsquerda;
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'F');
+    pdf.setDrawColor(180, 180, 180);
+    pdf.rect(xPos, yPos, larguraColunaRotulo, 8, 'S');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('Total', xPos + 2, yPos + 5);
+    xPos += larguraColunaRotulo;
+    totaisColunasPeriodo.forEach((tc, colIdx) => {
+        const larguraColunaAtual = (colIdx === totaisColunasPeriodo.length - 1)
+            ? Math.min(larguraColunaDados, pageWidth - margemDireita - xPos - larguraColunaTotalLinha)
+            : larguraColunaDados;
+        pdf.setFillColor(240, 240, 240);
+        pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'F');
+        pdf.setDrawColor(180, 180, 180);
+        pdf.rect(xPos, yPos, larguraColunaAtual, 8, 'S');
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(tc.toString(), xPos + 2, yPos + 5);
+        xPos += larguraColunaAtual;
+    });
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(xPos, yPos, larguraColunaTotalLinha, 8, 'F');
+    pdf.setDrawColor(180, 180, 180);
+    pdf.rect(xPos, yPos, larguraColunaTotalLinha, 8, 'S');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(totalGeralPeriodo.toString(), xPos + 2, yPos + 5);
+    yPos += 8 + 5;
+    
+    return yPos;
 }
 
 // Inicializar quando o DOM estiver pronto
