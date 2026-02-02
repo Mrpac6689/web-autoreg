@@ -25,6 +25,12 @@ PYTHONPATH = /usr/bin/python3
 
 AUTOREGPATH = /home/kasm-user/.autoreg/autoreg.py
 
+# Caminho do README do core (opcional):
+# Use se o servidor web não tiver permissão de leitura no diretório do AUTOREGPATH.
+# Ex: CORE_README_PATH = /caminho/do/Autoreg-web/static/docs/README_core.md
+
+# CORE_README_PATH =
+
 # Comando de entrada no container Docker:
 # Comando completo para executar bash dentro do container Docker
 # Formato: /usr/bin/docker exec -it <nome_container> bash

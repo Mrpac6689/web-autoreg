@@ -193,18 +193,30 @@ function setupFloatingMenu() {
             if (action === 'add-ras') {
                 const btn = document.getElementById('btn-add-ras');
                 if (btn) btn.click();
+            } else if (action === 'solicitar-tcs') {
+                const btn = document.getElementById('btn-solicitar-tcs');
+                if (btn) btn.click();
+            } else if (action === 'imprimir-tcs') {
+                const btn = document.getElementById('btn-imprimir-tcs');
+                if (btn) btn.click();
             } else if (action === 'prepara-sol-internacoes') {
                 const btn = document.getElementById('btn-prepara-sol-internacoes');
                 if (btn) btn.click();
             } else if (action === 'solicitar-internacoes') {
                 const btn = document.getElementById('btn-solicitar-internacoes');
                 if (btn) btn.click();
-            } else {
-                // Encontrar botão correspondente pela posição
+            } else if (action === 'documentacao') {
+                const btn = document.getElementById('btn-documentacao');
+                if (btn) btn.click();
+            } else if (action === 'producao-relatorios') {
+                const btn = document.getElementById('btn-producao-relatorios');
+                if (btn) btn.click();
+            } else if (action && action.startsWith('func-')) {
+                // Funcionalidades 6 a 10 por índice (botões na posição 5 a 9)
                 const buttons = document.querySelectorAll('.glass-button');
-                const actionIndex = parseInt(action.replace('func-', '')) - 1;
-                if (buttons[actionIndex]) {
-                    buttons[actionIndex].click();
+                const num = parseInt(action.replace('func-', ''), 10);
+                if (num >= 6 && num <= 10 && buttons[num - 1]) {
+                    buttons[num - 1].click();
                 }
             }
             

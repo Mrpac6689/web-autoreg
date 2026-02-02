@@ -56,6 +56,8 @@ env_config = load_env_file()
 WORKDIR = env_config.get('WORKDIR', '/home/michel/AutoReg')
 PYTHONPATH = env_config.get('PYTHONPATH', '/usr/bin/python3')
 AUTOREGPATH = env_config.get('AUTOREGPATH', '/home/michel/code/autoreg/autoreg.py')
+# Caminho opcional do README do core (use se o servidor não tiver permissão em dirname(AUTOREGPATH))
+CORE_README_PATH = env_config.get('CORE_README_PATH', '').strip() or None
 DOCKER = env_config.get('DOCKER', '/usr/bin/docker exec -it autoreg bash')
 
 # Flag para ativar/desativar execução em container Docker

@@ -1,0 +1,47 @@
+<!-- Modal para Documentação (README Autoreg-Web e Core Autoreg) -->
+<div class="glass-modal" id="modal-documentacao">
+    <div class="glass-modal-content modal-documentacao-90">
+        <div class="modal-header">
+            <h2><i class="fas fa-book"></i> Documentação</h2>
+            <div class="modal-header-actions">
+                <button class="glass-modal-minimize" id="minimize-modal-documentacao" title="Minimizar">
+                    <i class="fas fa-window-minimize"></i>
+                </button>
+                <button class="glass-modal-maximize" id="maximize-modal-documentacao" title="Maximizar" style="display: none;">
+                    <i class="fas fa-window-maximize"></i>
+                </button>
+                <button class="glass-modal-close" id="close-modal-documentacao">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="modal-body">
+            <!-- Abas -->
+            <div class="doc-tabs">
+                <button type="button" class="doc-tab active" data-tab="web" id="doc-tab-web">
+                    <i class="fas fa-globe"></i> Autoreg-Web
+                </button>
+                <button type="button" class="doc-tab" data-tab="core" id="doc-tab-core">
+                    <i class="fas fa-cog"></i> Core Autoreg
+                </button>
+            </div>
+            <!-- Conteúdo Markdown -->
+            <div class="doc-content-wrapper">
+                <div id="doc-loading" class="doc-loading" style="display: none;">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Carregando...</span>
+                </div>
+                <div id="doc-error" class="doc-error" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="doc-error-text"></span>
+                </div>
+                <div id="doc-view" class="doc-view markdown-body"></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="glass-button-action glass-button-danger" id="btn-fechar-documentacao">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>

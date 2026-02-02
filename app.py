@@ -24,7 +24,7 @@ from urllib.parse import urlparse, urljoin, quote as url_quote, unquote
 import zipfile
 import tempfile
 import calendar
-from config import WORKDIR, PYTHONPATH, AUTOREGPATH, DOCKER_CONTAINER, USE_DOCKER, SECRET_KEY
+from config import WORKDIR, PYTHONPATH, AUTOREGPATH, CORE_README_PATH, DOCKER_CONTAINER, USE_DOCKER, SECRET_KEY
 from auth import autenticar, listar_usuarios, adicionar_usuario, remover_usuario, alterar_senha, usuario_existe, obter_usuario_por_chave_api, gerar_chaves_para_usuarios_existentes
 
 # Desabilitar avisos de SSL não verificado
@@ -305,6 +305,53 @@ def current_time():
         'date': now.strftime('%d/%m/%Y'),
         'time': now.strftime('%H:%M:%S')
     })
+
+
+@app.route('/api/docs/readme', methods=['GET'])
+@login_required
+def api_docs_readme():
+    """Retorna o conteúdo do README em Markdown. source=web (Autoreg-web) ou source=core (core Autoreg)."""
+    source = request.args.get('source', 'web').strip().lower()
+    if source not in ('web', 'core'):
+        return jsonify({'error': 'source inválido. Use web ou core.'}), 400
+    path_str = ''
+    try:
+        if source == 'web':
+            readme_path = Path(__file__).parent / 'README.md'
+            path_str = str(readme_path)
+            with open(readme_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return jsonify({'content': content, 'error': None})
+        # Core: tentar CORE_README_PATH, depois dirname(AUTOREGPATH)/README.md, depois README_core.md no projeto
+        core_candidates = []
+        if CORE_README_PATH:
+            core_candidates.append(Path(os.path.abspath(os.path.expanduser(CORE_README_PATH))))
+        core_candidates.append(Path(os.path.abspath(os.path.expanduser(str(Path(AUTOREGPATH).parent)))) / 'README.md')
+        core_candidates.append(Path(__file__).parent / 'README_core.md')
+        for candidate in core_candidates:
+            path_str = str(candidate)
+            try:
+                with open(candidate, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                return jsonify({'content': content, 'error': None})
+            except (FileNotFoundError, PermissionError):
+                continue
+        return jsonify({
+            'error': f'Arquivo não encontrado ou sem permissão. Tente: (1) Definir CORE_README_PATH no env ou (2) Copiar o README do core para README_core.md na raiz do Autoreg-web.',
+            'content': None
+        }), 404
+    except FileNotFoundError:
+        return jsonify({
+            'error': f'Arquivo não encontrado: {path_str}. Para o core, defina CORE_README_PATH no env ou coloque uma cópia em README_core.md no projeto.',
+            'content': None
+        }), 404
+    except PermissionError:
+        return jsonify({
+            'error': 'Sem permissão de leitura. Defina CORE_README_PATH no env com um caminho acessível ou use README_core.md na raiz do projeto.',
+            'content': None
+        }), 403
+    except Exception as e:
+        return jsonify({'error': str(e), 'content': None}), 500
 
 
 @app.route('/api/exames-solicitar/load', methods=['GET'])

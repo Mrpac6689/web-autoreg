@@ -1,0 +1,34 @@
+# Criar este arquivo em /etc/systemd/system/autoregweb.service
+# Instalar com 'sudo systemctl enable --now autoregweb'
+
+[Unit]
+
+Description=Autoreg-Web
+
+After=multi-user.target
+
+[Service]
+
+Type=forking
+
+PIDFile=/var/run/autoregweb.pid
+
+ExecStart=/home/michel/code/Autoreg-web/start_production.sh --background
+
+User=root
+
+WorkingDirectory=/home/michel/code/Autoreg-web
+
+Restart=always
+
+RestartSec=1s
+
+StandardOutput=syslog
+
+StandardError=inherit
+
+ExecStop=/bin/kill -TERM $MAINPID
+
+[Install]
+
+WantedBy=multi-user.target

@@ -20,6 +20,8 @@
     
     <!-- CSS Produção e Relatórios -->
     <link href="{{ url_for('static', filename='css/producao_relatorios.css') }}" rel="stylesheet">
+    <!-- CSS Documentação -->
+    <link href="{{ url_for('static', filename='css/documentacao.css') }}" rel="stylesheet">
     
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -80,13 +82,13 @@
                     <i class="fas fa-x-ray"></i>
                     <span>Inserir RAs TCs</span>
                 </a>
-                <a href="#" class="menu-item" data-action="func-2">
+                <a href="#" class="menu-item" data-action="solicitar-tcs">
                     <i class="fas fa-file-medical"></i>
-                    <span>Funcionalidade 2</span>
+                    <span>Solicitar Tomografias</span>
                 </a>
-                <a href="#" class="menu-item" data-action="func-3">
+                <a href="#" class="menu-item" data-action="imprimir-tcs">
                     <i class="fas fa-clipboard-list"></i>
-                    <span>Funcionalidade 3</span>
+                    <span>Imprimir Tomografias</span>
                 </a>
                 <a href="#" class="menu-item" data-action="prepara-sol-internacoes">
                     <i class="fas fa-calendar-check"></i>
@@ -116,9 +118,9 @@
                     <i class="fas fa-download"></i>
                     <span>Funcionalidade 10</span>
                 </a>
-                <a href="#" class="menu-item" data-action="func-11">
-                    <i class="fas fa-upload"></i>
-                    <span>Funcionalidade 11</span>
+                <a href="#" class="menu-item" data-action="documentacao">
+                    <i class="fas fa-book"></i>
+                    <span>Documentação</span>
                 </a>
                 <a href="#" class="menu-item" data-action="producao-relatorios">
                     <i class="fas fa-chart-bar"></i>
@@ -181,9 +183,9 @@
                     <i class="fas fa-download"></i>
                     <span>Funcionalidade 10</span>
                 </button>
-                <button type="button" class="glass-button">
-                    <i class="fas fa-upload"></i>
-                    <span>Funcionalidade 11</span>
+                <button type="button" class="glass-button" id="btn-documentacao">
+                    <i class="fas fa-book"></i>
+                    <span>Documentação</span>
                 </button>
                 <button type="button" class="glass-button" id="btn-producao-relatorios">
                     <i class="fas fa-chart-bar"></i>
@@ -222,7 +224,10 @@
     {% include 'modals/instalar_extensao.html' %}
     {% include 'modals/reconectar_processos.html' %}
     {% include 'modals/producao_relatorios.html' %}
+    {% include 'modals/documentacao.html' %}
 
+    <!-- Marked.js para renderização de Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <!-- Bootstrap JS local -->
     <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
     
@@ -238,6 +243,7 @@
     <script src="{{ url_for('static', filename='js/pendencias_internacoes.js') }}"></script>
     <script src="{{ url_for('static', filename='js/solicitar_internacoes.js') }}"></script>
     <script src="{{ url_for('static', filename='js/producao_relatorios.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/documentacao.js') }}"></script>
 </body>
 </html>
 
