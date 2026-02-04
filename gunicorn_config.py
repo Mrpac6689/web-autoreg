@@ -1,8 +1,10 @@
 # Configuração do Gunicorn para produção
 bind = "100.99.180.78:5000"
-workers = 4
+# Um worker para que listar/reconectar processos vejam o mesmo estado (processos_ativos em memória)
+workers = 1
 threads = 2
-timeout = 120
+# Timeout alto para permitir streams SSE longos (ex.: solicitar TCs pode levar muitos minutos)
+timeout = 3600
 worker_class = "sync"
 accesslog = "-"
 errorlog = "-"

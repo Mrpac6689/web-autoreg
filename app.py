@@ -11,6 +11,7 @@ import os
 import json
 import re
 import subprocess
+import signal
 import threading
 import time
 import select
@@ -117,6 +118,9 @@ processos_info = {}
 import threading
 import queue
 processos_lock = threading.Lock()
+
+# Intervalo em segundos para enviar comentário SSE keepalive (evita que proxy/load balancer feche por idle)
+SSE_KEEPALIVE_INTERVAL = 20
 
 
 def limpar_processos_finalizados():
@@ -361,7 +365,7 @@ def load_exames_csv():
     csv_path = Path(WORKDIR) / 'exames_solicitar.csv'
     
     # Cabeçalho padrão do CSV
-    CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'dividir', 'cns', 'procedimento', 'chave', 'solicitacao']
+    CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'dividir', 'chave', 'solicitacao', 'erro', 'existentes', 'obs', 'solicita']
     
     try:
         # Garantir que o diretório existe
@@ -391,11 +395,19 @@ def load_exames_csv():
                 writer.writerow(CABECALHO_PADRAO)
             arquivo_criado = True
         
-        # Verificar se a primeira linha é o cabeçalho válido
+        # Normalizar cabeçalho e linhas ao número de colunas padrão
+        num_cols = len(CABECALHO_PADRAO)
+        header_alterado = False
         if len(data) > 0:
-            # Se a primeira linha estiver vazia ou não tiver o número correto de colunas, substituir pelo cabeçalho
-            if len(data[0]) == 0 or len(data[0]) != len(CABECALHO_PADRAO):
-                data[0] = CABECALHO_PADRAO
+            if len(data[0]) == 0 or len(data[0]) != num_cols:
+                data[0] = list(CABECALHO_PADRAO)
+                header_alterado = True
+            for i in range(1, len(data)):
+                if len(data[i]) < num_cols:
+                    data[i] = list(data[i]) + [''] * (num_cols - len(data[i]))
+                elif len(data[i]) > num_cols:
+                    data[i] = data[i][:num_cols]
+            if header_alterado:
                 with open(csv_path, 'w', newline='', encoding='utf-8') as f:
                     writer = csv.writer(f)
                     writer.writerows(data)
@@ -419,7 +431,7 @@ def save_exames_csv():
         csv_path = Path(WORKDIR) / 'exames_solicitar.csv'
         
         # Cabeçalho padrão que DEVE ser preservado
-        CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'dividir', 'cns', 'procedimento', 'chave', 'solicitacao']
+        CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'dividir', 'chave', 'solicitacao', 'erro', 'existentes', 'obs', 'solicita']
         
         # Garantir que o diretório existe
         csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -505,6 +517,134 @@ def count_exames_csv():
         }), 500
 
 
+@app.route('/api/exames-solicitar/preparar', methods=['POST'])
+@login_required
+def executar_preparar_solicitacoes():
+    """Executa a sequência -eae -eac do autoreg com streaming. Aceita comando_index para Continuar."""
+    data = request.json or {}
+    comando_index = data.get('comando_index', 0)
+    session_id = data.get('session_id', str(threading.current_thread().ident))
+
+    def gerar():
+        nonlocal session_id
+        try:
+            comandos = [['-eae'], ['-eac']]
+            if comando_index >= len(comandos):
+                yield f"data: {json.dumps({'tipo': 'completo', 'mensagem': 'Todos os comandos foram executados!'})}\n\n"
+                return
+
+            if 'python' in PYTHONPATH.lower():
+                comando_original = [PYTHONPATH, '-u', AUTOREGPATH] + comandos[comando_index]
+            else:
+                comando_original = [PYTHONPATH, AUTOREGPATH] + comandos[comando_index]
+
+            if USE_DOCKER and DOCKER_CONTAINER:
+                container_ok, mensagem = verificar_container_docker()
+                if not container_ok:
+                    yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': f'Container Docker não acessível: {mensagem}'})}\n\n"
+                    return
+
+            comando = construir_comando_docker(comando_original)
+            yield f"data: {json.dumps({'tipo': 'inicio', 'comando': ' '.join(comando)})}\n\n"
+
+            env = os.environ.copy()
+            env['PYTHONUNBUFFERED'] = '1'
+            cwd_exec = None if (USE_DOCKER and DOCKER_CONTAINER) else WORKDIR
+
+            processo = subprocess.Popen(
+                comando,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=0,
+                universal_newlines=True,
+                cwd=cwd_exec,
+                env=env
+            )
+
+            with processos_lock:
+                processos_ativos[session_id] = processo
+                processos_info[session_id] = {
+                    'comando': ' '.join(comando),
+                    'tipo': 'exames-preparar',
+                }
+
+            buffer_linha = ''
+            while True:
+                try:
+                    r, _, _ = select.select([processo.stdout], [], [], SSE_KEEPALIVE_INTERVAL)
+                    if not r:
+                        yield ": keepalive\n\n"
+                        continue
+                except (ValueError, OSError):
+                    pass
+                char = processo.stdout.read(1)
+                if not char:
+                    if processo.poll() is not None:
+                        if buffer_linha.strip():
+                            yield f"data: {json.dumps({'tipo': 'output', 'linha': buffer_linha.rstrip()})}\n\n"
+                        break
+                    continue
+                buffer_linha += char
+                if char == '\n':
+                    linha_limpa = buffer_linha.rstrip()
+                    if linha_limpa:
+                        yield f"data: {json.dumps({'tipo': 'output', 'linha': linha_limpa})}\n\n"
+                    buffer_linha = ''
+
+            processo.wait()
+            with processos_lock:
+                if session_id in processos_ativos:
+                    del processos_ativos[session_id]
+                if session_id in processos_info:
+                    del processos_info[session_id]
+
+            if processo.returncode == 0:
+                yield f"data: {json.dumps({'tipo': 'sucesso', 'mensagem': 'Comando executado com sucesso!', 'comando_index': comando_index})}\n\n"
+            else:
+                yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': f'Comando retornou código {processo.returncode}', 'comando_index': comando_index})}\n\n"
+        except Exception as e:
+            with processos_lock:
+                if session_id in processos_ativos:
+                    del processos_ativos[session_id]
+                if session_id in processos_info:
+                    del processos_info[session_id]
+            yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': str(e), 'comando_index': comando_index})}\n\n"
+
+    response = Response(gerar(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+
+
+@app.route('/api/exames-solicitar/interromper-preparar', methods=['POST'])
+@login_required
+def interromper_preparar_solicitacoes():
+    """Interrompe o processo de preparar solicitações enviando Ctrl+C (SIGINT)."""
+    try:
+        data = request.json or {}
+        session_id = data.get('session_id', str(threading.current_thread().ident))
+
+        with processos_lock:
+            if session_id in processos_ativos:
+                processo = processos_ativos[session_id]
+                info = processos_info.get(session_id, {})
+                if info.get('tipo') != 'exames-preparar':
+                    return jsonify({'success': False, 'mensagem': 'Processo não é de preparar solicitações'}), 400
+                try:
+                    processo.send_signal(signal.SIGINT)
+                    return jsonify({'success': True, 'mensagem': 'Sinal de interrupção (Ctrl+C) enviado'})
+                except ProcessLookupError:
+                    if session_id in processos_ativos:
+                        del processos_ativos[session_id]
+                    if session_id in processos_info:
+                        del processos_info[session_id]
+                    return jsonify({'success': True, 'mensagem': 'Processo já havia terminado'})
+            return jsonify({'success': False, 'mensagem': 'Nenhum processo em execução encontrado'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/solicitar-tcs/executar', methods=['POST'])
 @login_required
 def executar_solicitacao_tcs():
@@ -517,11 +657,10 @@ def executar_solicitacao_tcs():
     def gerar():
         nonlocal session_id
         try:
-            # Comandos a serem executados sequencialmente
+            # Comandos a serem executados sequencialmente (-eas, -ear)
             comandos = [
-                ['-eae'],  # Executar comando -eae
-                ['-eas'],  # Executar comando -eas
-                ['-ear']   # Executar comando -ear
+                ['-eas'],
+                ['-ear']
             ]
             
             if comando_index >= len(comandos):
@@ -579,6 +718,13 @@ def executar_solicitacao_tcs():
             # Isso permite ver a saída mesmo antes de uma linha completa
             buffer_linha = ''
             while True:
+                try:
+                    r, _, _ = select.select([processo.stdout], [], [], SSE_KEEPALIVE_INTERVAL)
+                    if not r:
+                        yield ": keepalive\n\n"
+                        continue
+                except (ValueError, OSError):
+                    pass
                 char = processo.stdout.read(1)
                 if not char:
                     # Verificar se processo ainda está rodando
@@ -609,17 +755,24 @@ def executar_solicitacao_tcs():
             # Calcular progresso
             progresso = int(((comando_index + 1) / len(comandos)) * 100)
             
+            # Remover processo_info ao terminar
+            with processos_lock:
+                if session_id in processos_info:
+                    del processos_info[session_id]
+            
             # Enviar resultado
             if processo.returncode == 0:
-                yield f"data: {json.dumps({'tipo': 'sucesso', 'comando_index': comando_index, 'progresso': progresso, 'completo': comando_index + 1 >= len(comandos)})}\n\n"
+                yield f"data: {json.dumps({'tipo': 'sucesso', 'comando_index': comando_index, 'progresso': progresso, 'completo': comando_index + 1 >= len(comandos), 'mensagem': 'Comando executado com sucesso!'})}\n\n"
             else:
-                yield f"data: {json.dumps({'tipo': 'erro', 'codigo': processo.returncode, 'mensagem': 'Comando retornou código de erro'})}\n\n"
+                yield f"data: {json.dumps({'tipo': 'erro', 'comando_index': comando_index, 'codigo': processo.returncode, 'mensagem': 'Comando retornou código de erro'})}\n\n"
                 
         except Exception as e:
             # Remover processo da lista de ativos em caso de erro
             with processos_lock:
                 if session_id in processos_ativos:
                     del processos_ativos[session_id]
+                if session_id in processos_info:
+                    del processos_info[session_id]
             yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': str(e)})}\n\n"
     
     response = Response(gerar(), mimetype='text/event-stream')
@@ -631,7 +784,7 @@ def executar_solicitacao_tcs():
 @app.route('/api/solicitar-tcs/interromper', methods=['POST'])
 @login_required
 def interromper_solicitacao_tcs():
-    """Interrompe o processo Python do autoreg em execução"""
+    """Interrompe o processo de solicitar tomografias enviando Ctrl+C (SIGINT)."""
     try:
         data = request.json or {}
         session_id = data.get('session_id', str(threading.current_thread().ident))
@@ -639,37 +792,19 @@ def interromper_solicitacao_tcs():
         with processos_lock:
             if session_id in processos_ativos:
                 processo = processos_ativos[session_id]
-                
-                # Tentar terminar o processo de forma suave primeiro
+                info = processos_info.get(session_id, {})
+                if info.get('tipo') != 'solicitar-tcs':
+                    return jsonify({'success': False, 'mensagem': 'Processo não é de solicitar tomografias'}), 400
                 try:
-                    processo.terminate()
-                    # Aguardar até 5 segundos para terminação suave
-                    try:
-                        processo.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        # Se não terminar suavemente, forçar kill
-                        processo.kill()
-                        processo.wait()
-                    
-                    del processos_ativos[session_id]
-                    
-                    return jsonify({
-                        'success': True,
-                        'mensagem': 'Processo interrompido com sucesso'
-                    })
+                    processo.send_signal(signal.SIGINT)
+                    return jsonify({'success': True, 'mensagem': 'Sinal de interrupção (Ctrl+C) enviado'})
                 except ProcessLookupError:
-                    # Processo já terminou
                     if session_id in processos_ativos:
                         del processos_ativos[session_id]
-                    return jsonify({
-                        'success': True,
-                        'mensagem': 'Processo já havia terminado'
-                    })
-            else:
-                return jsonify({
-                    'success': False,
-                    'mensagem': 'Nenhum processo em execução encontrado'
-                }), 404
+                    if session_id in processos_info:
+                        del processos_info[session_id]
+                    return jsonify({'success': True, 'mensagem': 'Processo já havia terminado'})
+            return jsonify({'success': False, 'mensagem': 'Nenhum processo em execução encontrado'})
                 
     except Exception as e:
         return jsonify({
@@ -2583,6 +2718,13 @@ def executar_buscar_pendentes():
             # Ler saída caractere por caractere para streaming verdadeiro
             buffer_linha = ''
             while True:
+                try:
+                    r, _, _ = select.select([processo.stdout], [], [], SSE_KEEPALIVE_INTERVAL)
+                    if not r:
+                        yield ": keepalive\n\n"
+                        continue
+                except (ValueError, OSError):
+                    pass
                 char = processo.stdout.read(1)
                 if not char:
                     if processo.poll() is not None:
@@ -2803,18 +2945,24 @@ def executar_solicitar_internacoes():
             # Processar saída da queue
             buffer_linha = ''
             ultima_linha_aguardando = None
+            keepalive_count = 0
             
             while True:
                 try:
                     # Aguardar item da queue com timeout
                     try:
                         tipo_item, dados = output_queue.get(timeout=0.5)
+                        keepalive_count = 0
                     except queue.Empty:
                         # Timeout - verificar se processo ainda está rodando
                         if processo.poll() is not None:
                             if buffer_linha.strip():
                                 yield f"data: {json.dumps({'tipo': 'output', 'linha': buffer_linha.rstrip()})}\n\n"
                             break
+                        keepalive_count += 1
+                        if keepalive_count >= 30:  # ~15s sem dados -> keepalive SSE
+                            yield ": keepalive\n\n"
+                            keepalive_count = 0
                         continue
                     
                     if tipo_item == 'fim':
@@ -3066,18 +3214,24 @@ def executar_revisar_aih():
             # Processar saída da queue
             buffer_linha = ''
             ultima_linha_aguardando = None
+            keepalive_count = 0
             
             while True:
                 try:
                     # Aguardar item da queue com timeout
                     try:
                         tipo_item, dados = output_queue.get(timeout=0.5)
+                        keepalive_count = 0
                     except queue.Empty:
                         # Timeout - verificar se processo ainda está rodando
                         if processo.poll() is not None:
                             if buffer_linha.strip():
                                 yield f"data: {json.dumps({'tipo': 'output', 'linha': buffer_linha.rstrip()})}\n\n"
                             break
+                        keepalive_count += 1
+                        if keepalive_count >= 30:  # ~15s sem dados -> keepalive SSE
+                            yield ": keepalive\n\n"
+                            keepalive_count = 0
                         continue
                     
                     if tipo_item == 'fim':
@@ -3822,6 +3976,9 @@ def reconectar_processo():
                     if processo.poll() is not None:
                         yield f"data: {json.dumps({'tipo': 'info', 'mensagem': 'Processo finalizado'})}\n\n"
                         break
+                    # Keepalive SSE a cada ~15s para evitar que proxy feche por idle
+                    if timeout_count > 0 and timeout_count % 30 == 0:
+                        yield ": keepalive\n\n"
                     
                     # Se muitos timeouts e processo ainda rodando, pode ser que stdout não esteja mais disponível
                     if timeout_count >= max_timeouts and processo.poll() is None:

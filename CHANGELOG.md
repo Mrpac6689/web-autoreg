@@ -15,6 +15,16 @@ Histórico de alterações notáveis do **AUTOREG-WEB**. O formato é baseado em
 
 ### [Não lançado] (Unreleased)
 
+#### Corrigido
+
+- **Streaming e 502 nos modais:** solução para desconexão aparente dos streams de terminal (502) e para "Investigar Processos" não encontrar processos em execução.
+  - Gunicorn: timeout aumentado para 3600 s e uso de um único worker para estado de processos consistente (listar/reconectar).
+  - Backend: keepalive SSE (comentário a cada ~20 s) em todas as rotas de streaming para evitar que proxy/balanceador feche por idle.
+  - Cliente (Solicitar Tomografias): em 502/503 ou erro de rede, consulta `/api/processos/listar` e orienta o usuário a usar "Reconectar a Processos em Execução" quando o processo ainda estiver rodando; retry automático (2 tentativas com backoff) em 502/503; sessionId persistido em sessionStorage para orientar reconexão ao reabrir o modal.
+  - Documentação: PROXY_SSE.md com exemplos de configuração de proxy (nginx, Traefik, Caddy) para timeouts longos em rotas SSE.
+
+#### Documentação
+
 - Documentação: README.md completo com seções em PT-BR e inglês.
 - Documentação: CHANGELOG.md para histórico de versões.
 - Funcionalidades e tecnologias descritas em detalhes no README.
@@ -49,6 +59,16 @@ Histórico de alterações notáveis do **AUTOREG-WEB**. O formato é baseado em
 
 ### [Unreleased]
 
+#### Fixed
+
+- **Streaming and 502 in modals:** fix for apparent disconnection of terminal streams (502) and "Investigate Processes" not finding running processes.
+  - Gunicorn: timeout increased to 3600 s and single worker for consistent process state (list/reconnect).
+  - Backend: SSE keepalive (comment every ~20 s) on all streaming routes to prevent proxy/load balancer from closing due to idle.
+  - Client (Request Tomographies): on 502/503 or network error, calls `/api/processos/listar` and guides user to use "Reconnect to Running Processes" when the process is still running; automatic retry (2 attempts with backoff) on 502/503; sessionId persisted in sessionStorage to guide reconnect when reopening the modal.
+  - Documentation: PROXY_SSE.md with proxy configuration examples (nginx, Traefik, Caddy) for long timeouts on SSE routes.
+
+#### Documentation
+
 - Documentation: full README with PT-BR and English sections.
 - Documentation: CHANGELOG.md for version history.
 - Features and technologies described in detail in README.
@@ -79,7 +99,7 @@ Histórico de alterações notáveis do **AUTOREG-WEB**. O formato é baseado em
 
 ---
 
-[Não lançado]: https://github.com/mrpac6689/Autoreg-web/compare/v1.0.0...HEAD  
-[1.0.0]: https://github.com/mrpac6689/Autoreg-web/releases/tag/v1.0.0
+[Não lançado]: https://github.com/mrpac6689/web-autoreg/compare/v1.0.0...HEAD  
+[1.0.0]: https://github.com/mrpac6689/web-autoreg/releases/tag/v1.0.0
 
-*(Substitua as URLs acima pelo repositório real do AUTOREG-WEB, se diferente.)*
+
