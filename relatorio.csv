@@ -118,3 +118,44 @@ data,hora,rotina,usuario,registros
 01/02/2026,11:17:59,Altas,michel,7
 2026-02-01,15:00:27,Internar Pacientes,michel,7
 2026-02-01,15:03:46,Altas,michel,0
+02/02/2026,07:47:49,Internar Pacientes,michel,8
+2026-02-02,09:00:30,Internar Pacientes,michel,7
+2026-02-02,09:04:48,Altas,michel,2
+2026-02-02,15:00:25,Internar Pacientes,michel,7
+2026-02-02,15:03:45,Altas,michel,0
+2026-02-03,09:00:32,Internar Pacientes,michel,60
+2026-02-03,09:19:09,Altas,michel,0
+03/02/2026,10:56:29,Solicitar Tomografias,maria.jesus,5
+03/02/2026,11:07:01,Solicitar Tomografias,nyele,3
+2026-02-03,15:00:28,Internar Pacientes,michel,9
+2026-02-03,15:04:26,Altas,michel,0
+03/02/2026,15:32:33,Solicitar Tomografias,maria.jesus,3
+03/02/2026,15:34:35,Solicitar Tomografias,maria.jesus,4
+03/02/2026,15:42:12,Solicitar Tomografias,maria.jesus,11
+03/02/2026,15:57:31,Solicitar Tomografias,michel,4
+2026-02-03,16:02:10,Internar Pacientes,michel,8
+2026-02-03,16:05:51,Altas,michel,0
+2026-02-03,16:24:07,Internar Pacientes,michel,8
+2026-02-03,16:27:31,Altas,michel,0
+2026-02-03,16:34:05,Internar Pacientes,michel,8
+2026-02-03,16:41:58,Altas,michel,31
+2026-02-03,16:52:47,Internar Pacientes,michel,8
+2026-02-03,17:00:11,Altas,michel,34
+2026-02-03,17:05:09,Internar Pacientes,michel,8
+2026-02-03,17:15:28,Altas,michel,34
+2026-02-03,18:17:27,Internar Pacientes,michel,15
+2026-02-03,18:23:05,Altas,michel,2
+2026-02-03,18:37:47,Internar Pacientes,michel,12
+2026-02-03,18:42:40,Altas,michel,4
+2026-02-04,09:00:02,Internar Pacientes,michel,0
+2026-02-04,09:00:03,Altas,michel,0
+04/02/2026,11:39:30,Solicitar Tomografias,michel,5
+04/02/2026,11:49:43,Solicitar Tomografias,michel,5
+04/02/2026,11:53:29,Solicitar Tomografias,michel,5
+04/02/2026,12:08:12,Solicitar Tomografias,maria.jesus,3
+04/02/2026,13:11:36,Solicitar Tomografias,maria.jesus,19
+04/02/2026,14:32:07,Solicitar Tomografias,maria.jesus,16
+2026-02-04,15:00:25,Internar Pacientes,michel,9
+2026-02-04,15:05:07,Altas,michel,9
+04/02/2026,15:10:58,Solicitar Tomografias,maria.jesus,27
+04/02/2026,16:01:51,Solicitar Internações,michel,3

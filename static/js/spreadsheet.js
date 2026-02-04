@@ -7,6 +7,13 @@ let originalData = [];
 let isEdited = false;
 let currentModal = null;
 
+// Preparar Solicitações (-eae -eac): estado do fluxo
+let isExecutandoPreparar = false;
+let readerAtualExames = null;
+let sessionIdExames = null;
+/** 0 = mostrar "Preparar Solicitações", 1 = mostrar "Continuar..." (próximo passo -eac) */
+let proximoPassoPreparar = 0;
+
 // Sistema de seleção
 let selectionStartCell = null;
 let selectedCells = new Set();
@@ -23,6 +30,31 @@ function initSpreadsheetModal() {
     const btnLimpar = document.getElementById('btn-limpar-ras');
     const btnSalvar = document.getElementById('btn-salvar-ras');
     const btnSair = document.getElementById('btn-sair-ras');
+    const btnAtualizar = document.getElementById('btn-atualizar-exames');
+    const btnPreparar = document.getElementById('btn-preparar-solicitacoes');
+    const btnInterromperPreparar = document.getElementById('btn-interromper-preparar');
+    const btnContinuarPreparar = document.getElementById('btn-continuar-preparar');
+    
+    if (btnAtualizar) {
+        btnAtualizar.addEventListener('click', function() {
+            loadSpreadsheetData();
+        });
+    }
+    if (btnPreparar) {
+        btnPreparar.addEventListener('click', function() {
+            iniciarPrepararSolicitacoes(0);
+        });
+    }
+    if (btnInterromperPreparar) {
+        btnInterromperPreparar.addEventListener('click', function() {
+            interromperPreparar();
+        });
+    }
+    if (btnContinuarPreparar) {
+        btnContinuarPreparar.addEventListener('click', function() {
+            iniciarPrepararSolicitacoes(1);
+        });
+    }
     
     if (btnAddRas) {
         btnAddRas.addEventListener('click', function() {
@@ -185,6 +217,284 @@ function doCloseModal() {
 }
 
 /**
+ * Reseta o terminal do modal de exames
+ */
+function resetarTerminalExames() {
+    const terminalOutput = document.getElementById('terminal-output-exames');
+    if (terminalOutput) {
+        terminalOutput.innerHTML = '<div class="terminal-line">Aguardando início da execução...</div>';
+    }
+}
+
+/**
+ * Adiciona uma linha ao terminal do modal de exames
+ */
+function adicionarLinhaTerminalExames(texto) {
+    const terminalOutput = document.getElementById('terminal-output-exames');
+    if (!terminalOutput) return;
+    const line = document.createElement('div');
+    line.className = 'terminal-line';
+    line.textContent = texto;
+    terminalOutput.appendChild(line);
+    terminalOutput.scrollTop = terminalOutput.scrollHeight;
+}
+
+/**
+ * Atualiza visibilidade dos botões Preparar / Interromper / Continuar
+ */
+function atualizarBotoesPreparar() {
+    const btnPreparar = document.getElementById('btn-preparar-solicitacoes');
+    const btnInterromper = document.getElementById('btn-interromper-preparar');
+    const btnContinuar = document.getElementById('btn-continuar-preparar');
+    if (isExecutandoPreparar) {
+        if (btnPreparar) { btnPreparar.style.display = 'none'; }
+        if (btnInterromper) { btnInterromper.style.display = 'inline-block'; btnInterromper.disabled = false; }
+        if (btnContinuar) { btnContinuar.style.display = 'none'; }
+    } else {
+        if (btnInterromper) { btnInterromper.style.display = 'none'; }
+        if (proximoPassoPreparar === 1) {
+            if (btnPreparar) { btnPreparar.style.display = 'none'; }
+            if (btnContinuar) { btnContinuar.style.display = 'inline-block'; btnContinuar.disabled = false; }
+        } else {
+            if (btnPreparar) { btnPreparar.style.display = 'inline-block'; btnPreparar.disabled = false; }
+            if (btnContinuar) { btnContinuar.style.display = 'none'; }
+        }
+    }
+}
+
+/**
+ * Esconde Continuar e mostra apenas Preparar (sequência terminou ou reset)
+ */
+function mostrarApenasPreparar() {
+    proximoPassoPreparar = 0;
+    const btnPreparar = document.getElementById('btn-preparar-solicitacoes');
+    const btnContinuar = document.getElementById('btn-continuar-preparar');
+    const btnInterromper = document.getElementById('btn-interromper-preparar');
+    if (btnPreparar) { btnPreparar.style.display = 'inline-block'; btnPreparar.disabled = false; }
+    if (btnContinuar) { btnContinuar.style.display = 'none'; }
+    if (btnInterromper) { btnInterromper.style.display = 'none'; }
+}
+
+/**
+ * Finaliza o fluxo de Preparar (sucesso ou interrupção/erro)
+ */
+function finalizarPreparar(sucesso, comandoIndex) {
+    isExecutandoPreparar = false;
+    readerAtualExames = null;
+    if (sucesso && comandoIndex === 0) {
+        proximoPassoPreparar = 1;
+        atualizarBotoesPreparar();
+    } else {
+        mostrarApenasPreparar();
+    }
+}
+
+/**
+ * Interrompe o processo de Preparar (envia Ctrl+C no servidor)
+ */
+function interromperPreparar() {
+    if (!isExecutandoPreparar) return;
+    if (!confirm('Tem certeza que deseja interromper?')) return;
+    if (readerAtualExames) {
+        readerAtualExames.cancel();
+        readerAtualExames = null;
+    }
+    fetch('/api/exames-solicitar/interromper-preparar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionIdExames })
+    })
+    .then(function(response) {
+        return response.json().then(function(data) {
+            if (data.success) {
+                adicionarLinhaTerminalExames('\n⚠️ Processo interrompido pelo usuário');
+                isExecutandoPreparar = false;
+                readerAtualExames = null;
+                proximoPassoPreparar = 1;
+                atualizarBotoesPreparar();
+            } else {
+                adicionarLinhaTerminalExames('\n⚠️ ' + (data.mensagem || data.error || 'Erro ao interromper'));
+                isExecutandoPreparar = false;
+                readerAtualExames = null;
+                proximoPassoPreparar = 1;
+                atualizarBotoesPreparar();
+            }
+        });
+    })
+    .catch(function(error) {
+        console.error('Erro ao interromper:', error);
+        adicionarLinhaTerminalExames('\n⚠️ Erro ao interromper: ' + (error.message || error));
+        isExecutandoPreparar = false;
+        readerAtualExames = null;
+        proximoPassoPreparar = 1;
+        atualizarBotoesPreparar();
+    });
+}
+
+/**
+ * Executa um passo da sequência (0 = -eae, 1 = -eac). Ao sucesso do passo 0, chama automaticamente o passo 1.
+ * "Continuar" só aparece em caso de interrupção ou erro.
+ */
+function executarPassoPreparar(comandoIndex) {
+    adicionarLinhaTerminalExames(comandoIndex === 0 ? 'Iniciando -eae...' : 'Iniciando -eac...');
+
+    fetch('/api/exames-solicitar/preparar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionIdExames, comando_index: comandoIndex })
+    })
+    .then(function(response) {
+        if (!response.ok) throw new Error('Erro na resposta do servidor');
+        return response.body.getReader();
+    })
+    .then(function(reader) {
+        readerAtualExames = reader;
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        function processarEvento(dadosJson) {
+            try {
+                const data = JSON.parse(dadosJson);
+                var idx = data.comando_index !== undefined ? data.comando_index : comandoIndex;
+                switch (data.tipo) {
+                    case 'inicio':
+                        adicionarLinhaTerminalExames('\n>>> ' + (data.comando || ''));
+                        break;
+                    case 'output':
+                        adicionarLinhaTerminalExames(data.linha || '');
+                        break;
+                    case 'sucesso':
+                        adicionarLinhaTerminalExames('\n✅ ' + (data.mensagem || ''));
+                        if (idx === 0) {
+                            readerAtualExames.cancel();
+                            readerAtualExames = null;
+                            adicionarLinhaTerminalExames('\n--- Executando -eac em sequência ---');
+                            executarPassoPreparar(1);
+                        } else {
+                            isExecutandoPreparar = false;
+                            readerAtualExames = null;
+                            proximoPassoPreparar = 0;
+                            adicionarLinhaTerminalExames('\nAtualizando visualização do CSV...');
+                            loadSpreadsheetData();
+                            mostrarApenasPreparar();
+                        }
+                        break;
+                    case 'erro':
+                        adicionarLinhaTerminalExames('\n❌ ' + (data.mensagem || ''));
+                        isExecutandoPreparar = false;
+                        readerAtualExames = null;
+                        if (idx === 0) {
+                            proximoPassoPreparar = 1;
+                            atualizarBotoesPreparar();
+                        } else {
+                            mostrarApenasPreparar();
+                        }
+                        break;
+                    case 'completo':
+                        adicionarLinhaTerminalExames('\n✅ ' + (data.mensagem || ''));
+                        isExecutandoPreparar = false;
+                        readerAtualExames = null;
+                        proximoPassoPreparar = 0;
+                        adicionarLinhaTerminalExames('\nAtualizando visualização do CSV...');
+                        loadSpreadsheetData();
+                        mostrarApenasPreparar();
+                        break;
+                }
+            } catch (e) {
+                console.error('Erro ao processar evento:', e, dadosJson);
+            }
+        }
+
+        function lerStream() {
+            reader.read().then(function(_ref) {
+                var done = _ref.done;
+                var value = _ref.value;
+                if (done) {
+                    if (buffer.trim()) {
+                        buffer.split('\n').forEach(function(linha) {
+                            if (linha.startsWith('data: ')) processarEvento(linha.substring(6));
+                        });
+                    }
+                    return;
+                }
+                buffer += decoder.decode(value, { stream: true });
+                var linhas = buffer.split('\n');
+                buffer = linhas.pop() || '';
+                linhas.forEach(function(linha) {
+                    if (linha.startsWith('data: ')) processarEvento(linha.substring(6));
+                });
+                lerStream();
+            }).catch(function(error) {
+                if (error.name === 'AbortError') return;
+                console.error('Erro ao ler stream:', error);
+                adicionarLinhaTerminalExames('\n❌ Erro: ' + (error.message || error));
+                isExecutandoPreparar = false;
+                readerAtualExames = null;
+                if (comandoIndex === 0) {
+                    proximoPassoPreparar = 1;
+                    atualizarBotoesPreparar();
+                } else {
+                    mostrarApenasPreparar();
+                }
+            });
+        }
+        lerStream();
+    })
+    .catch(function(error) {
+        console.error('Erro:', error);
+        adicionarLinhaTerminalExames('\n❌ Erro ao iniciar: ' + (error.message || error));
+        isExecutandoPreparar = false;
+        readerAtualExames = null;
+        if (comandoIndex === 0) {
+            proximoPassoPreparar = 1;
+            atualizarBotoesPreparar();
+        } else {
+            mostrarApenasPreparar();
+        }
+    });
+}
+
+/**
+ * Inicia ou continua a sequência Preparar Solicitações (-eae ou -eac).
+ * Se comandoIndex === 0, grava o CSV antes de iniciar. Sucesso em -eae dispara -eac automaticamente.
+ * "Continuar" só aparece após interrupção ou erro.
+ */
+function iniciarPrepararSolicitacoes(comandoIndex) {
+    if (isExecutandoPreparar) return;
+    if (!sessionIdExames) {
+        sessionIdExames = 'exames-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    }
+
+    const terminalContainer = document.getElementById('terminal-container-exames');
+    if (terminalContainer) terminalContainer.style.display = 'block';
+    if (comandoIndex === 0) resetarTerminalExames();
+
+    function comecarProcesso() {
+        isExecutandoPreparar = true;
+        atualizarBotoesPreparar();
+        executarPassoPreparar(comandoIndex);
+    }
+
+    if (comandoIndex === 0) {
+        isExecutandoPreparar = true;
+        atualizarBotoesPreparar();
+        adicionarLinhaTerminalExames('Gravando CSV antes de iniciar...');
+        salvarPlanilha()
+            .then(function() {
+                adicionarLinhaTerminalExames('CSV gravado. Iniciando processo.');
+                comecarProcesso();
+            })
+            .catch(function() {
+                isExecutandoPreparar = false;
+                atualizarBotoesPreparar();
+                adicionarLinhaTerminalExames('\n❌ Falha ao gravar o CSV. Corrija e tente novamente.');
+            });
+    } else {
+        comecarProcesso();
+    }
+}
+
+/**
  * Carrega os dados do CSV
  */
 function loadSpreadsheetData() {
@@ -219,20 +529,15 @@ function renderSpreadsheet() {
     header.innerHTML = '';
     body.innerHTML = '';
     
-    // Cabeçalho padrão do CSV
-    const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'dividir', 'cns', 'procedimento', 'chave', 'solicitacao'];
+    // Cabeçalho padrão do CSV (exibição dinâmica: usa primeira linha do arquivo quando há dados)
+    const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'dividir', 'chave', 'solicitacao', 'erro', 'existentes', 'obs', 'solicita'];
     
     // Garantir que sempre há pelo menos o cabeçalho
     if (spreadsheetData.length === 0) {
-        // Se não houver dados, criar estrutura padrão com cabeçalho
         spreadsheetData = [CABECALHO_PADRAO];
     }
-    
-    // Garantir que a primeira linha é SEMPRE o cabeçalho válido
-    if (spreadsheetData.length > 0) {
-        // Forçar o cabeçalho correto, mesmo que tenha sido alterado
-        spreadsheetData[0] = [...CABECALHO_PADRAO];
-    } else {
+    // Se já há dados, manter a primeira linha como veio do servidor (cabeçalho dinâmico)
+    else if (spreadsheetData.length > 0 && (!spreadsheetData[0] || spreadsheetData[0].length === 0)) {
         spreadsheetData[0] = [...CABECALHO_PADRAO];
     }
     
@@ -448,8 +753,7 @@ function updateCellData(cell) {
     
     // NUNCA permitir editar a primeira linha (cabeçalho)
     if (row === 0) {
-        // Restaurar o valor original do cabeçalho
-        const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'dividir', 'cns', 'procedimento', 'chave', 'solicitacao'];
+        const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'dividir', 'chave', 'solicitacao', 'erro', 'existentes', 'obs', 'solicita'];
         if (spreadsheetData[0] && spreadsheetData[0][col] !== CABECALHO_PADRAO[col]) {
             spreadsheetData[0][col] = CABECALHO_PADRAO[col];
             cell.textContent = CABECALHO_PADRAO[col];
@@ -1211,7 +1515,7 @@ async function limparPlanilha() {
 function salvarPlanilha() {
     return new Promise((resolve, reject) => {
         // Cabeçalho padrão que DEVE ser preservado
-        const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'dividir', 'cns', 'procedimento', 'chave', 'solicitacao'];
+        const CABECALHO_PADRAO = ['ra', 'hora', 'contraste', 'cns', 'procedimento', 'dividir', 'chave', 'solicitacao', 'erro', 'existentes', 'obs', 'solicita'];
         
         // SIMPLIFICADO: Salvar TODAS as linhas do spreadsheetData
         // spreadsheetData[0] = cabeçalho (será substituído pelo padrão)

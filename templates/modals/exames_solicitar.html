@@ -1,6 +1,6 @@
 <!-- Modal para Inserir RAs TCs -->
 <div class="glass-modal" id="modal-exames-solicitar">
-    <div class="glass-modal-content modal-large">
+    <div class="glass-modal-content modal-exames-90">
         <div class="modal-header">
             <h2>Inserir RAs para Solicitar Tomografias</h2>
             <button class="glass-modal-close" id="close-modal-exames">
@@ -25,10 +25,32 @@
                 <p>A coluna "cns" é opcional. Se não for preenchida, o sistema usará o CNS do prontuário G-Hosp.</p>
                 <p>Caso hajam multiplos pedidos com o mesmo RA e hora, lance apenas um e insira a letra s na coluna "dividir". O sistema fará um pedido independente para cada exame.</p>
             </div>
+            <!-- Terminal para Preparar Solicitações (-eae -eac) -->
+            <div class="terminal-container" id="terminal-container-exames" style="display: none; margin-top: 20px;">
+                <div class="terminal-header">
+                    <i class="fas fa-terminal"></i>
+                    <span>Saída do Terminal</span>
+                </div>
+                <div class="terminal-output" id="terminal-output-exames">
+                    <div class="terminal-line">Aguardando início da execução...</div>
+                </div>
+            </div>
         </div>
         <div class="modal-footer">
             <button type="button" class="glass-button-action" id="btn-limpar-ras">
                 <i class="fas fa-trash-alt"></i> Limpar
+            </button>
+            <button type="button" class="glass-button-action" id="btn-atualizar-exames">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+            <button type="button" class="glass-button-action" id="btn-preparar-solicitacoes">
+                <i class="fas fa-cogs"></i> Preparar Solicitações
+            </button>
+            <button type="button" class="glass-button-action glass-button-danger" id="btn-interromper-preparar" style="display: none;">
+                <i class="fas fa-stop"></i> Interromper
+            </button>
+            <button type="button" class="glass-button-action" id="btn-continuar-preparar" style="display: none;">
+                <i class="fas fa-play"></i> Continuar...
             </button>
             <button type="button" class="glass-button-action" id="btn-salvar-ras">
                 <i class="fas fa-save"></i> Salvar
